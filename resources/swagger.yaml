@@ -1,0 +1,1694 @@
+openapi: 3.0.3
+info:
+  title: Casa Comigo API
+  description: |
+    API REST para gestão colaborativa de tarefas domésticas.
+
+    ## Autenticação
+    Todos os endpoints (exceto `/auth/register` e `/auth/login`) requerem um token JWT
+    no header `Authorization: Bearer <token>`.
+
+    ## Níveis de acesso (RN06)
+    - **admin** — acesso total
+    - **catalog_manager** — gerencia catálogo de tarefas e visualiza cronograma
+    - **resident** — vê e conclui suas próprias tarefas, registra preferências
+  version: 1.0.0
+  contact:
+    name: Casa Comigo
+
+servers:
+  - url: http://localhost:3000/api
+    description: Servidor local
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Mensagem de erro descritiva.
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT Bearer token
+        user:
+          $ref: '#/components/schemas/User'
+
+    House:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        invite_code:
+          type: string
+          description: Código de convite (visível apenas para admin)
+          example: ABC123
+        tolerance_percentage:
+          type: integer
+          description: Tolerância de desvio no balanceamento (RN02)
+          example: 10
+        created_at:
+          type: string
+          format: date-time
+
+    HouseSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, catalog_manager, resident]
+        created_at:
+          type: string
+          format: date-time
+
+    Member:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, catalog_manager, resident]
+        weight_percentage:
+          type: number
+          nullable: true
+          description: Percentual de carga (null = distribuição igualitária)
+        weekly_availability_hours:
+          type: number
+          example: 10
+        created_at:
+          type: string
+          format: date-time
+
+    WeightsSummary:
+      type: object
+      properties:
+        using_equal_distribution:
+          type: boolean
+        total_defined_weight:
+          type: number
+        is_valid:
+          type: boolean
+          description: true se pesos somam 100%
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id:
+                type: string
+              name:
+                type: string
+              weight_percentage:
+                type: number
+                nullable: true
+              effective_weight:
+                type: number
+                description: Peso efetivo considerando distribuição igualitária se necessário
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        frequency:
+          type: string
+          enum: [daily, weekly, biweekly, monthly, quarterly, annual]
+        duration_minutes:
+          type: integer
+          example: 30
+        effort_level:
+          type: string
+          enum: [light, medium, heavy]
+        room:
+          type: string
+          nullable: true
+        is_active:
+          type: integer
+          enum: [0, 1]
+        created_by:
+          type: string
+          format: uuid
+        created_by_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TaskDetail:
+      allOf:
+        - $ref: '#/components/schemas/Task'
+        - type: object
+          properties:
+            dependencies:
+              type: array
+              description: Tarefas que esta deve executar APÓS (RN01)
+              items:
+                type: object
+                properties:
+                  depends_on_task_id:
+                    type: string
+                  depends_on_name:
+                    type: string
+            dependents:
+              type: array
+              description: Tarefas que dependem desta
+              items:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  task_name:
+                    type: string
+
+    Preference:
+      type: object
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        task_name:
+          type: string
+        room:
+          type: string
+          nullable: true
+        effort_level:
+          type: string
+          enum: [light, medium, heavy]
+        preference_level:
+          type: string
+          enum: [hate, neutral, like]
+        has_physical_limitation:
+          type: boolean
+          description: Se true, tarefa nunca será atribuída (RN03)
+
+    Assignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        task_name:
+          type: string
+        frequency:
+          type: string
+        duration_minutes:
+          type: integer
+        effort_level:
+          type: string
+          enum: [light, medium, heavy]
+        room:
+          type: string
+          nullable: true
+        assigned_to:
+          type: string
+          format: uuid
+        assigned_to_name:
+          type: string
+        scheduled_date:
+          type: string
+          format: date
+          example: "2024-07-15"
+        status:
+          type: string
+          enum: [pending, completed, overdue, redistributed]
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        completion_notes:
+          type: string
+          nullable: true
+        group_id:
+          type: string
+          nullable: true
+          description: Agrupa tarefas do mesmo cômodo/dependência (RN01)
+        sequence_order:
+          type: integer
+          description: Ordem de execução dentro do grupo
+
+    DistributionResult:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        total_tasks_assigned:
+          type: integer
+        within_tolerance:
+          type: boolean
+          description: Se todos os moradores estão dentro da tolerância definida (RN02)
+        balance:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceEntry'
+
+    BalanceEntry:
+      type: object
+      properties:
+        user_id:
+          type: string
+        name:
+          type: string
+        target_percentage:
+          type: number
+          description: Percentual alvo definido pelo admin (RN02)
+        actual_percentage:
+          type: number
+          description: Percentual real após a distribuição
+        deviation:
+          type: number
+          description: Desvio em pontos percentuais
+        within_tolerance:
+          type: boolean
+
+    PerformanceReport:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+              nullable: true
+            to:
+              type: string
+              format: date
+              nullable: true
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id:
+                type: string
+              name:
+                type: string
+              role:
+                type: string
+              weight_percentage:
+                type: number
+                nullable: true
+              total_assigned:
+                type: integer
+              completed:
+                type: integer
+              overdue:
+                type: integer
+              redistributed:
+                type: integer
+              pending:
+                type: integer
+              completion_rate:
+                type: number
+                description: Percentual de conclusão (0-100)
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ─── AUTH ───────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Autenticação]
+      summary: Cadastrar novo usuário
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: Ana Luiza
+                email:
+                  type: string
+                  format: email
+                  example: ana@example.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: senha123
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Campos inválidos ou senha muito curta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: E-mail já cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [Autenticação]
+      summary: Autenticar usuário e obter token JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login bem-sucedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Campos obrigatórios ausentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── HOUSES ─────────────────────────────────────────────────────
+  /houses:
+    post:
+      tags: [Casas]
+      summary: Criar nova casa (cria o usuário como administrador)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Apartamento 42
+      responses:
+        '201':
+          description: Casa criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+        '400':
+          description: Nome obrigatório
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Token inválido ou ausente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/me:
+    get:
+      tags: [Casas]
+      summary: Listar casas do usuário autenticado
+      responses:
+        '200':
+          description: Lista de casas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HouseSummary'
+        '401':
+          description: Token inválido ou ausente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/join:
+    post:
+      tags: [Casas]
+      summary: Entrar em uma casa via código de convite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invite_code]
+              properties:
+                invite_code:
+                  type: string
+                  example: ABC123
+      responses:
+        '200':
+          description: Entrou na casa com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+        '404':
+          description: Código de convite inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Já é membro desta casa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}:
+    get:
+      tags: [Casas]
+      summary: Obter detalhes de uma casa
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalhes da casa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+        '403':
+          description: Não é membro desta casa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Casa não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/tolerance:
+    patch:
+      tags: [Casas]
+      summary: Atualizar tolerância de desvio de balanceamento (admin) — RN02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tolerance_percentage]
+              properties:
+                tolerance_percentage:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  example: 10
+      responses:
+        '200':
+          description: Tolerância atualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Valor inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── MEMBERS ────────────────────────────────────────────────────
+  /houses/{houseId}/members:
+    get:
+      tags: [Membros]
+      summary: Listar membros da casa
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de membros
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Member'
+        '403':
+          description: Não é membro desta casa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/members/invite:
+    post:
+      tags: [Membros]
+      summary: Convidar membro por e-mail (admin) — EP01-US01
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '201':
+          description: Membro adicionado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  role:
+                    type: string
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Usuário não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Usuário já é membro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/members/weights:
+    get:
+      tags: [Membros]
+      summary: Painel de pesos de distribuição (admin) — EP03-US05 / RN02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resumo dos pesos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightsSummary'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/members/{userId}/role:
+    put:
+      tags: [Membros]
+      summary: Atualizar papel de membro (admin) — EP01-US04/US05 / RN06
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [admin, catalog_manager, resident]
+      responses:
+        '200':
+          description: Papel atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Papel inválido ou tentativa de alterar próprio papel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Membro não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/members/{userId}/weight:
+    put:
+      tags: [Membros]
+      summary: Definir peso de distribuição de membro (admin) — EP03-US04 / RN02 / RN07
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weight_percentage]
+              properties:
+                weight_percentage:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  example: 40
+      responses:
+        '200':
+          description: Peso atualizado. Se pesos não somam 100%, retorna aviso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  total_weight:
+                    type: number
+                  warning:
+                    type: string
+                    nullable: true
+        '400':
+          description: Valor inválido ou membro não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/members/{userId}/availability:
+    put:
+      tags: [Membros]
+      summary: Atualizar disponibilidade semanal do membro — EP01-US02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weekly_availability_hours]
+              properties:
+                weekly_availability_hours:
+                  type: number
+                  minimum: 0
+                  example: 10
+      responses:
+        '200':
+          description: Disponibilidade atualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Valor inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/members/{userId}:
+    delete:
+      tags: [Membros]
+      summary: Remover membro da casa (admin)
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Membro removido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Tentativa de remover o único admin ou a si mesmo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Membro não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── CATALOG ────────────────────────────────────────────────────
+  /houses/{houseId}/catalog:
+    get:
+      tags: [Catálogo de Tarefas]
+      summary: Listar tarefas do catálogo da casa — EP02-US01
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de tarefas ativas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '403':
+          description: Não é membro desta casa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [Catálogo de Tarefas]
+      summary: Criar tarefa no catálogo (admin ou gestor de catálogo) — EP02-US02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, frequency, effort_level]
+              properties:
+                name:
+                  type: string
+                  example: Varrer a sala
+                description:
+                  type: string
+                frequency:
+                  type: string
+                  enum: [daily, weekly, biweekly, monthly, quarterly, annual]
+                duration_minutes:
+                  type: integer
+                  default: 30
+                  example: 20
+                effort_level:
+                  type: string
+                  enum: [light, medium, heavy]
+                room:
+                  type: string
+                  example: Sala
+      responses:
+        '201':
+          description: Tarefa criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetail'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — requer admin ou gestor de catálogo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/catalog/{taskId}:
+    get:
+      tags: [Catálogo de Tarefas]
+      summary: Obter tarefa com suas dependências
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tarefa com dependências
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetail'
+        '404':
+          description: Tarefa não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [Catálogo de Tarefas]
+      summary: Atualizar tarefa (admin ou gestor de catálogo) — EP02-US02/US03
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, frequency, effort_level]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                frequency:
+                  type: string
+                  enum: [daily, weekly, biweekly, monthly, quarterly, annual]
+                duration_minutes:
+                  type: integer
+                effort_level:
+                  type: string
+                  enum: [light, medium, heavy]
+                room:
+                  type: string
+      responses:
+        '200':
+          description: Tarefa atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetail'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tarefa não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Catálogo de Tarefas]
+      summary: Remover tarefa do catálogo (soft delete) — EP02-US02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tarefa removida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          description: Acesso negado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tarefa não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/catalog/{taskId}/dependencies:
+    post:
+      tags: [Catálogo de Tarefas]
+      summary: Adicionar dependência entre tarefas — EP02-US03 / RN01
+      description: Define que `taskId` deve ser executada APÓS `depends_on_task_id`.
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [depends_on_task_id]
+              properties:
+                depends_on_task_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Dependência adicionada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Dependência circular ou inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Dependência já existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/catalog/{taskId}/dependencies/{dependsOnId}:
+    delete:
+      tags: [Catálogo de Tarefas]
+      summary: Remover dependência entre tarefas
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: dependsOnId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dependência removida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Dependência não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── PREFERENCES ────────────────────────────────────────────────
+  /houses/{houseId}/preferences:
+    get:
+      tags: [Preferências]
+      summary: Listar preferências do usuário autenticado — EP03-US01/US02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preferências do usuário para todas as tarefas da casa
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Preference'
+
+  /houses/{houseId}/preferences/{taskId}:
+    put:
+      tags: [Preferências]
+      summary: Definir ou atualizar preferência para uma tarefa — EP03-US01/US02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preference_level]
+              properties:
+                preference_level:
+                  type: string
+                  enum: [hate, neutral, like]
+                has_physical_limitation:
+                  type: boolean
+                  default: false
+                  description: Se true, tarefa nunca será atribuída ao morador (RN03)
+      responses:
+        '200':
+          description: Preferência salva
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  preference_level:
+                    type: string
+                  has_physical_limitation:
+                    type: boolean
+        '400':
+          description: Valor inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Tarefa não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/preferences/member/{userId}:
+    get:
+      tags: [Preferências]
+      summary: Listar preferências de um membro específico (admin)
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preferências do membro
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    task_id:
+                      type: string
+                    preference_level:
+                      type: string
+                    has_physical_limitation:
+                      type: integer
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── SCHEDULE ───────────────────────────────────────────────────
+  /houses/{houseId}/schedule/distribute:
+    post:
+      tags: [Cronograma]
+      summary: Gerar distribuição automática de tarefas (admin) — EP04-US01/US02
+      description: |
+        Cria atribuições de tarefas para o período informado respeitando:
+        - Preferências e limitações físicas dos moradores (RN03)
+        - Pesos de distribuição por morador (RN02)
+        - Agrupamento por cômodo e dependências de ordem (RN01)
+        - Balanceamento de esforço total
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period_start, period_end]
+              properties:
+                period_start:
+                  type: string
+                  format: date
+                  example: "2024-07-01"
+                period_end:
+                  type: string
+                  format: date
+                  example: "2024-07-31"
+                period_label:
+                  type: string
+                  description: Rótulo identificador do período (gerado automaticamente se omitido)
+                  example: "julho-2024"
+      responses:
+        '201':
+          description: Distribuição gerada. Retorna resultado do balanceamento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionResult'
+        '400':
+          description: Datas inválidas ou catálogo vazio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/schedule:
+    get:
+      tags: [Cronograma]
+      summary: Consultar cronograma — EP05-US01/US02
+      description: |
+        - Moradores veem apenas suas próprias tarefas
+        - Admins e gestores de catálogo veem toda a casa (pode filtrar por `assigned_to`)
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2024-07-01"
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2024-07-31"
+        - name: assigned_to
+          in: query
+          description: Filtrar por user_id (apenas admin/gestor)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de atribuições
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assignment'
+
+  /houses/{houseId}/schedule/{assignmentId}:
+    get:
+      tags: [Cronograma]
+      summary: Obter detalhe de uma atribuição
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalhe da atribuição
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '404':
+          description: Atribuição não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/schedule/{assignmentId}/reassign:
+    put:
+      tags: [Cronograma]
+      summary: Reatribuir tarefa manualmente (admin) — EP04-US04
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assigned_to]
+              properties:
+                assigned_to:
+                  type: string
+                  format: uuid
+                  description: user_id do novo responsável
+      responses:
+        '200':
+          description: Tarefa reatribuída
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '400':
+          description: Membro inválido, limitação física (RN03) ou tarefa já concluída
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/schedule/{assignmentId}/complete:
+    patch:
+      tags: [Cronograma]
+      summary: Marcar tarefa como concluída — EP07-US01/US02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completion_notes:
+                  type: string
+                  example: "Produto de limpeza acabou, precisa repor."
+      responses:
+        '200':
+          description: Tarefa marcada como concluída
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '400':
+          description: Tarefa já concluída
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tarefa não está atribuída a você
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/schedule/{assignmentId}/impediment:
+    patch:
+      tags: [Cronograma]
+      summary: Reportar impedimento e redistribuir tarefa — EP04-US05 / RN04 / RN05
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tarefa redistribuída automaticamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  new_assignment:
+                    $ref: '#/components/schemas/Assignment'
+        '400':
+          description: Nenhum membro elegível disponível
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Tarefa não está atribuída a você
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── REPORTS ────────────────────────────────────────────────────
+  /houses/{houseId}/reports/performance:
+    get:
+      tags: [Relatórios]
+      summary: Relatório de desempenho por morador (admin) — EP07-US03
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Relatório de desempenho
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceReport'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /houses/{houseId}/reports/balance:
+    get:
+      tags: [Relatórios]
+      summary: Painel de balanceamento de esforço (admin) — EP03-US05 / RN02
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Painel de balanceamento atual
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  using_equal_distribution:
+                    type: boolean
+                  tolerance_percentage:
+                    type: integer
+                  within_tolerance:
+                    type: boolean
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BalanceEntry'
+        '403':
+          description: Acesso negado — não é admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── HEALTH ─────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Sistema]
+      summary: Verificação de saúde da API
+      security: []
+      responses:
+        '200':
+          description: API operacional
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
