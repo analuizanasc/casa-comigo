@@ -194,6 +194,135 @@ describe('distribute – todas as frequências de tarefa', () => {
   });
 });
 
+// ─── Branch: depMap append (L82) + inDegree parcial (L161) ──────────────────
+
+describe('distribute – dupla dependência do mesmo task cobre depMap append e inDegree parcial', () => {
+  test('DT09 – tC dependendo de tA e tB: depMap.push existente (L82) e inDegree decrementa para 1 antes de 0 (L161)', () => {
+    const tA = { id: 'tA', name: 'A', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: null, is_active: 1 };
+    const tB = { id: 'tB', name: 'B', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: null, is_active: 1 };
+    const tC = { id: 'tC', name: 'C', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: null, is_active: 1 };
+    const deps = [
+      { task_id: 'tC', depends_on_task_id: 'tA' },
+      { task_id: 'tC', depends_on_task_id: 'tB' },
+    ];
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ all: [tA, tB, tC] }))
+      .mockReturnValueOnce(makeStmt({ all: [memberA] }))
+      .mockReturnValueOnce(makeStmt({ all: deps }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValue(makeStmt({ get: { tolerance_percentage: 10 } }));
+
+    const result = distribute(distributeArgs);
+    expect(result.total_tasks_assigned).toBe(3);
+  });
+});
+
+// ─── Branch: taskIds.has(depId) false (L110) ─────────────────────────────────
+
+describe('distribute – dependência para tarefa ausente nas ocorrências do dia', () => {
+  test('DT10 – taskIds.has(depId) false quando dep aponta para tarefa inativa removida (L110)', () => {
+    const tA = { id: 'tA', name: 'A', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: null, is_active: 1 };
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ all: [tA] }))
+      .mockReturnValueOnce(makeStmt({ all: [memberA] }))
+      .mockReturnValueOnce(makeStmt({ all: [{ task_id: 'tA', depends_on_task_id: 'tGhost' }] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValue(makeStmt({ get: { tolerance_percentage: 10 } }));
+
+    const result = distribute(distributeArgs);
+    expect(result.total_tasks_assigned).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ─── Branch: fallback circular (L167) ────────────────────────────────────────
+
+describe('distribute – dependência circular aciona fallback topológico', () => {
+  test('DT11 – tA↔tB circular: queue vazia no início → fallback insere ambos (L167)', () => {
+    const tA = { id: 'tA', name: 'A', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: null, is_active: 1 };
+    const tB = { id: 'tB', name: 'B', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: null, is_active: 1 };
+    const deps = [
+      { task_id: 'tA', depends_on_task_id: 'tB' },
+      { task_id: 'tB', depends_on_task_id: 'tA' },
+    ];
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ all: [tA, tB] }))
+      .mockReturnValueOnce(makeStmt({ all: [memberA] }))
+      .mockReturnValueOnce(makeStmt({ all: deps }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValue(makeStmt({ get: { tolerance_percentage: 10 } }));
+
+    const result = distribute(distributeArgs);
+    expect(result.total_tasks_assigned).toBe(2);
+  });
+});
+
+// ─── Branch: weight_percentage null com usingEqual false (L244) ──────────────
+
+describe('distribute – membro sem peso quando outros têm peso definido', () => {
+  test('DT12 – membro com null weight usa equalWeight via branch || quando usingEqual=false (L244)', () => {
+    const memberWithWeight    = { user_id: 'u1', name: 'Ana', weight_percentage: 100, weekly_availability_hours: 10, role: 'admin' };
+    const memberWithoutWeight = { user_id: 'u2', name: 'Bob', weight_percentage: null, weekly_availability_hours: 10, role: 'resident' };
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ all: [taskLight] }))
+      .mockReturnValueOnce(makeStmt({ all: [memberWithWeight, memberWithoutWeight] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValue(makeStmt({ get: { tolerance_percentage: 10 } }));
+
+    const result = distribute(distributeArgs);
+    expect(result.balance.find(b => b.user_id === 'u2')).toBeDefined();
+  });
+});
+
+// ─── Branch: reduce true (L287) – fallback seleciona 2º membro com menor carga
+
+describe('distribute – fallback reduce aciona branch true quando 2º membro tem menor esforço', () => {
+  test('DT13 – dois grupos com todos limitados: grupo2 pega o membro com menor carga acumulada (L287)', () => {
+    const tARoom = { id: 'tA', name: 'A', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: 'Sala',   is_active: 1 };
+    const tBRoom = { id: 'tB', name: 'B', frequency: 'weekly', duration_minutes: 10, effort_level: 'light', room: 'Cozinha', is_active: 1 };
+    const prefs = [
+      { user_id: 'u1', task_id: 'tA', preference_level: 'hate', has_physical_limitation: 1 },
+      { user_id: 'u2', task_id: 'tA', preference_level: 'hate', has_physical_limitation: 1 },
+      { user_id: 'u1', task_id: 'tB', preference_level: 'hate', has_physical_limitation: 1 },
+      { user_id: 'u2', task_id: 'tB', preference_level: 'hate', has_physical_limitation: 1 },
+    ];
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ all: [tARoom, tBRoom] }))
+      .mockReturnValueOnce(makeStmt({ all: [memberA, memberB] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValueOnce(makeStmt({ all: prefs }))
+      .mockReturnValue(makeStmt({ get: { tolerance_percentage: 10 } }));
+
+    const result = distribute(distributeArgs);
+    expect(result.total_tasks_assigned).toBe(2);
+    // Os dois membros dividem as tarefas via fallback
+    const totalActual = result.balance.reduce((s, b) => s + b.actual_percentage, 0);
+    expect(totalActual).toBeCloseTo(100, 0);
+  });
+});
+
+// ─── Branch: totalEffort === 0 no balanço final (L330) ───────────────────────
+
+describe('distribute – totalEffort zero quando período não gera ocorrências', () => {
+  test('DT14 – actual_percentage=0 para todos quando período invertido não gera ocorrências (L330)', () => {
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ all: [taskLight] }))
+      .mockReturnValueOnce(makeStmt({ all: [memberA] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValue(makeStmt({ get: { tolerance_percentage: 10 } }));
+
+    const result = distribute({ ...distributeArgs, periodStart: '2024-07-31', periodEnd: '2024-07-01' });
+    expect(result.total_tasks_assigned).toBe(0);
+    result.balance.forEach(b => expect(b.actual_percentage).toBe(0));
+  });
+});
+
 // ─── Fallback quando todos têm limitação física ───────────────────────────────
 
 describe('distribute – fallback quando todos os membros têm limitação', () => {

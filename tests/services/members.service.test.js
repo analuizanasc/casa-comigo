@@ -154,6 +154,17 @@ describe('updateWeight', () => {
     expect(err.status).toBe(400);
   });
 
+  test('MS09b – total_weight é 0 quando SUM retorna null (branch ||)', () => {
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: { id: 'm1' } }))
+      .mockReturnValueOnce(makeStmt())
+      .mockReturnValueOnce(makeStmt({ get: { total: null } }));
+
+    const result = updateWeight({ houseId: 'h1', targetUserId: 'u2', weightPercentage: 50 });
+    expect(result.total_weight).toBe(0);
+    expect(result.warning).not.toBeNull();
+  });
+
   test('MS13 – lança 404 se membro não existe', () => {
     db.prepare.mockReturnValueOnce(makeStmt({ get: null }));
 

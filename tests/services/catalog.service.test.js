@@ -246,6 +246,42 @@ describe('addDependency', () => {
   });
 });
 
+// ─── updateTask – branch ?? ───────────────────────────────────────────────────
+
+describe('updateTask – duration_minutes omitido', () => {
+  test('CT10b – usa 30 como padrão quando duration_minutes é undefined (branch ??)', () => {
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: { id: 't1' } }))
+      .mockReturnValueOnce(makeStmt())
+      .mockReturnValueOnce(makeStmt({ get: fakeTask }))
+      .mockReturnValueOnce(makeStmt({ all: [] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }));
+
+    const body = { name: 'Varrer', frequency: 'weekly', effort_level: 'light' };
+    const result = updateTask({ taskId: 't1', houseId: 'h1', body });
+    expect(result).toBeDefined();
+  });
+});
+
+// ─── hasCircularDependency – branch visited.has ───────────────────────────────
+
+describe('addDependency – nó já visitado no BFS (visited.has)', () => {
+  test('CT18b – BFS ignora nó já visitado prevenindo loop infinito', () => {
+    // taskId='t3' quer depender de 't1'. t1→t2→t1 (ciclo sem t3) → BFS processa
+    // t1, t2, tenta t1 de novo → visited.has(t1)=true → continue
+    uuidv4.mockReturnValue('dep-new');
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: { id: 't3' } }))
+      .mockReturnValueOnce(makeStmt({ get: { id: 't1' } }))
+      .mockReturnValueOnce(makeStmt({ all: [{ depends_on_task_id: 't2' }] }))
+      .mockReturnValueOnce(makeStmt({ all: [{ depends_on_task_id: 't1' }] }))
+      .mockReturnValueOnce(makeStmt({ get: null }))
+      .mockReturnValueOnce(makeStmt());
+
+    expect(() => addDependency({ taskId: 't3', dependsOnTaskId: 't1', houseId: 'h1' })).not.toThrow();
+  });
+});
+
 // ─── removeDependency ─────────────────────────────────────────────────────────
 
 describe('removeDependency', () => {

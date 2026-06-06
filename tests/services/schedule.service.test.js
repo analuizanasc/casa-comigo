@@ -162,6 +162,18 @@ describe('completeTask', () => {
     expect(err.status).toBe(400);
   });
 
+  test('SC10b – conclui tarefa sem notas (completionNotes null → branch ||)', () => {
+    const completedAssignment = { ...fakeAssignment, status: 'completed', completion_notes: null };
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))
+      .mockReturnValueOnce(makeStmt())
+      .mockReturnValueOnce(makeStmt({ get: completedAssignment }));
+
+    const result = completeTask({ assignmentId: 'a1', houseId: 'h1', userId: 'u1', completionNotes: null });
+    expect(result.status).toBe('completed');
+    expect(result.completion_notes).toBeNull();
+  });
+
   test('SC12 – lança 403 se tarefa pertence a outro usuário', () => {
     db.prepare.mockReturnValueOnce(makeStmt({ get: { ...fakeAssignment, assigned_to: 'u99' } }));
 
@@ -216,6 +228,28 @@ describe('reportImpediment', () => {
     catch (e) { err = e; }
 
     expect(err.status).toBe(400);
+  });
+
+  test('SC13b – mantém membro com menor carga entre múltiplos elegíveis (branch load >= bestLoad)', () => {
+    const newAssignment = { ...fakeAssignment, id: 'a2', assigned_to: 'u2' };
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))
+      .mockReturnValueOnce(makeStmt())
+      .mockReturnValueOnce(makeStmt({ all: [
+        { user_id: 'u2', weight_percentage: 50, role: 'resident' },
+        { user_id: 'u3', weight_percentage: 50, role: 'resident' },
+      ]}))
+      .mockReturnValueOnce(makeStmt({ get: null }))   // u2 sem limitação
+      .mockReturnValueOnce(makeStmt({ get: null }))   // u3 sem limitação
+      .mockReturnValueOnce(makeStmt({ get: { tolerance_percentage: 10 } }))
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 1 } }))   // carga u2 = 1 (menor → bestMember)
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 5 } }))   // carga u3 = 5 → 5 < 1 false → branch!
+      .mockReturnValueOnce(makeStmt())
+      .mockReturnValueOnce(makeStmt({ get: newAssignment }));
+
+    const result = reportImpediment({ assignmentId: 'a1', houseId: 'h1', userId: 'u1' });
+    expect(result.assigned_to).toBe('u2');
   });
 
   test('SC16 – lança 400 quando não há membros elegíveis para redistribuição', () => {

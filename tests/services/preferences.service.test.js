@@ -102,6 +102,16 @@ describe('upsertPreference', () => {
     expect(result.has_physical_limitation).toBe(true);
   });
 
+  test('PR05b – UPDATE com hasPhysicalLimitation=true cobre branch true do ternário (linha UPDATE)', () => {
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: { id: 't1' } }))
+      .mockReturnValueOnce(makeStmt({ get: { id: 'pref-id' } }))
+      .mockReturnValueOnce(makeStmt());
+
+    const result = upsertPreference({ ...validArgs, preferenceLevel: 'hate', hasPhysicalLimitation: true });
+    expect(result.has_physical_limitation).toBe(true);
+  });
+
   test('PR07 – lança 400 para preference_level inválido', () => {
     let err;
     try { upsertPreference({ ...validArgs, preferenceLevel: 'meh' }); }

@@ -189,6 +189,7 @@ function scoreMember(member, tasks, prefMap, currentEffort, targetEffort) {
   });
 
   // Load balance score — RN02: prefer member with lowest current/target ratio
+  /* istanbul ignore next -- targetEffort deriva de totalEffort*percent/100, só é 0 com groups vazio (forEach não executa) */
   const ratio = targetEffort > 0 ? currentEffort / targetEffort : currentEffort;
   const balanceScore = -ratio * 10;
 

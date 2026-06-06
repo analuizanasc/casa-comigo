@@ -100,6 +100,38 @@ describe('getBalancePanel', () => {
     });
   });
 
+  test('RP04b – ignora atribuições de membros removidos (branch effortByMember !== undefined)', () => {
+    const assignments = [
+      { assigned_to: 'u-ghost', effort_level: 'heavy' },  // membro não existe mais na casa
+      { assigned_to: 'u1', effort_level: 'light' },
+    ];
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: { tolerance_percentage: 10 } }))
+      .mockReturnValueOnce(makeStmt({ all: [fakeMembers[0]] }))
+      .mockReturnValueOnce(makeStmt({ all: assignments }));
+
+    const result = getBalancePanel('h1');
+    expect(result.members).toHaveLength(1);
+    expect(result.members[0].actual_percentage).toBeGreaterThan(0);
+  });
+
+  test('RP05b – membro com peso null usa equalWeight via branch || quando usingEqual=false (L84)', () => {
+    const memberComPeso   = { user_id: 'u1', name: 'Ana', weight_percentage: 100, role: 'admin' };
+    const memberSemPeso   = { user_id: 'u2', name: 'Bob', weight_percentage: null, role: 'resident' };
+
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: { tolerance_percentage: 10 } }))
+      .mockReturnValueOnce(makeStmt({ all: [memberComPeso, memberSemPeso] }))
+      .mockReturnValueOnce(makeStmt({ all: [] }));
+
+    const result = getBalancePanel('h1');
+    // u1 tem peso=100 → usingEqual=false. u2 tem peso=null → null||equalWeight → equalWeight=50
+    expect(result.using_equal_distribution).toBe(false);
+    const u2 = result.members.find(m => m.user_id === 'u2');
+    expect(u2.target_percentage).toBe(50);
+  });
+
   test('RP06 – actual_percentage é 0 quando não há atribuições', () => {
     db.prepare
       .mockReturnValueOnce(makeStmt({ get: { tolerance_percentage: 10 } }))
