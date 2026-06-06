@@ -177,3 +177,66 @@ task_catalog → task_dependencies (self-ref)
 member_preferences (user × task)
 task_assignments (task × user × date)
 ```
+
+---
+
+## Testes Automatizados de API
+
+Testes de integração para os endpoints POST da API, implementados com **Mocha**, **Chai** e **Supertest**. Relatório HTML gerado via **Mochawesome**.
+
+### Estrutura de testes
+
+```
+src/tests/api/
+├── index.test.js              # Arquivo central — carrega todos os testes
+├── helpers/
+│   ├── setup.js               # Configura variáveis de ambiente de teste
+│   ├── auth.helper.js         # Utilitários de autenticação (register, login, criar casa)
+│   └── db.helper.js           # Limpeza do banco de dados de teste
+├── fixtures/                  # Dados de teste (Data-Driven Testing)
+│   ├── auth.register.fixture.js
+│   ├── auth.login.fixture.js
+│   ├── houses.create.fixture.js
+│   ├── houses.join.fixture.js
+│   ├── members.invite.fixture.js
+│   ├── catalog.create.fixture.js
+│   ├── catalog.dependencies.fixture.js
+│   └── schedule.distribute.fixture.js
+└── post/                      # Testes por endpoint POST
+    ├── auth.register.test.js
+    ├── auth.login.test.js
+    ├── houses.create.test.js
+    ├── houses.join.test.js
+    ├── members.invite.test.js
+    ├── catalog.create.test.js
+    ├── catalog.dependencies.test.js
+    └── schedule.distribute.test.js
+```
+
+### Execução dos testes
+
+```bash
+# Roda testes e gera relatório HTML em src/tests/api/reports/
+npm run test:api
+
+# Roda testes sem gerar relatório (saída no terminal)
+npm run test:api:simples
+```
+
+O relatório HTML fica em `src/tests/api/reports/relatorio-api.html`.
+
+### Heurística VADER
+
+Cada endpoint é testado seguindo a heurística **VADER**:
+
+| Letra | Significado | O que verifica |
+|-------|-------------|----------------|
+| **V** | Verb | Método HTTP correto (POST) |
+| **A** | Authorization | Token obrigatório; papéis (admin, gestor, residente) |
+| **D** | Data | Campos válidos, inválidos, obrigatórios e limites |
+| **E** | Errors | Códigos HTTP corretos (400, 401, 403, 404, 409) |
+| **R** | Responsiveness | Tempo de resposta, Content-Type, estrutura da resposta |
+
+### Banco de dados de teste
+
+Os testes usam um banco SQLite separado (`data/casa-comigo-test.db`) para não afetar os dados de desenvolvimento. O banco é limpo automaticamente antes de cada suíte.
