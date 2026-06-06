@@ -57,13 +57,14 @@ function getTask(taskId, houseId) {
 
 function createTask({ houseId, userId, body }) {
   const { name, description, frequency, duration_minutes, effort_level, room } = body;
-  validateTaskFields({ name, frequency, duration_minutes: duration_minutes || 30, effort_level });
+  const dur = duration_minutes ?? 30;
+  validateTaskFields({ name, frequency, duration_minutes: dur, effort_level });
 
   const id = uuidv4();
   db.prepare(`
     INSERT INTO task_catalog (id, house_id, name, description, frequency, duration_minutes, effort_level, room, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, houseId, name.trim(), description || null, frequency, duration_minutes || 30, effort_level, room || null, userId);
+  `).run(id, houseId, name.trim(), description || null, frequency, dur, effort_level, room || null, userId);
 
   return getTask(id, houseId);
 }
@@ -75,13 +76,14 @@ function updateTask({ taskId, houseId, body }) {
   }
 
   const { name, description, frequency, duration_minutes, effort_level, room } = body;
-  validateTaskFields({ name, frequency, duration_minutes: duration_minutes || 30, effort_level });
+  const dur = duration_minutes ?? 30;
+  validateTaskFields({ name, frequency, duration_minutes: dur, effort_level });
 
   db.prepare(`
     UPDATE task_catalog
     SET name = ?, description = ?, frequency = ?, duration_minutes = ?, effort_level = ?, room = ?, updated_at = datetime('now')
     WHERE id = ? AND house_id = ?
-  `).run(name.trim(), description || null, frequency, duration_minutes || 30, effort_level, room || null, taskId, houseId);
+  `).run(name.trim(), description || null, frequency, dur, effort_level, room || null, taskId, houseId);
 
   return getTask(taskId, houseId);
 }
