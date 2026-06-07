@@ -51,13 +51,16 @@ function getAssignment(req, res) {
 
 function reassignTask(req, res) {
   try {
-    const { assigned_to } = req.body;
+    const { assigned_to, force, move_group } = req.body;
     if (!assigned_to) return res.status(400).json({ error: 'Campo obrigatório: assigned_to (user_id).' });
     const result = scheduleService.reassignTask({
       assignmentId: req.params.assignmentId,
       houseId: req.params.houseId,
       newUserId: assigned_to,
+      force: !!force,
+      moveGroup: !!move_group,
     });
+    // Retorna 200 mesmo no caso de confirmação pendente (requires_confirmation)
     return res.status(200).json(result);
   } catch (err) {
     return res.status(err.status || 500).json({ error: err.message });

@@ -13,8 +13,8 @@ function inviteMember(req, res) {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'E-mail é obrigatório.' });
-    const member = membersService.inviteMember({ houseId: req.params.houseId, email, invitedBy: req.user.id });
-    return res.status(201).json(member);
+    const result = membersService.inviteMember({ houseId: req.params.houseId, email, invitedBy: req.user.id });
+    return res.status(201).json(result);
   } catch (err) {
     return res.status(err.status || 500).json({ error: err.message });
   }

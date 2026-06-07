@@ -14,6 +14,7 @@ const catalogRoutes = require('./routes/catalog.routes');
 const preferencesRoutes = require('./routes/preferences.routes');
 const scheduleRoutes = require('./routes/schedule.routes');
 const reportsRoutes = require('./routes/reports.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 runMigrations();
 
@@ -33,6 +34,7 @@ app.use('/api/houses/:houseId/catalog', catalogRoutes);
 app.use('/api/houses/:houseId/preferences', preferencesRoutes);
 app.use('/api/houses/:houseId/schedule', scheduleRoutes);
 app.use('/api/houses/:houseId/reports', reportsRoutes);
+app.use('/api', notificationsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

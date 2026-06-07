@@ -1,5 +1,12 @@
 const db = require('../config/database');
 
+function addColumnIfNotExists(table, column, definition) {
+  const info = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!info.find(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 function runMigrations() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -80,10 +87,38 @@ function runMigrations() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      data TEXT,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      house_id TEXT NOT NULL REFERENCES houses(id) ON DELETE CASCADE,
+      invited_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invited_by TEXT NOT NULL REFERENCES users(id),
+      status TEXT NOT NULL CHECK(status IN ('pending','accepted','rejected')) DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_assignments_house_date ON task_assignments(house_id, scheduled_date);
     CREATE INDEX IF NOT EXISTS idx_assignments_user ON task_assignments(assigned_to, scheduled_date);
     CREATE INDEX IF NOT EXISTS idx_assignments_status ON task_assignments(house_id, status);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+    CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(invited_user_id, status);
   `);
+
+  // Idempotent column additions for existing tables
+  addColumnIfNotExists('users', 'onboarding_step', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfNotExists('task_catalog', 'frequency_count', 'INTEGER');
+  addColumnIfNotExists('task_catalog', 'frequency_unit', 'TEXT');
+  addColumnIfNotExists('task_assignments', 'completed_by', 'TEXT');
 }
 
 module.exports = { runMigrations };

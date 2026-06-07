@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../config/database');
+const { createNotification } = require('./notifications.service');
 
 function getMembers(houseId) {
   return db.prepare(`
@@ -12,6 +13,7 @@ function getMembers(houseId) {
   `).all(houseId);
 }
 
+// Envia convite via notificação in-app — substitui o e-mail
 function inviteMember({ houseId, email, invitedBy }) {
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user) {
@@ -30,11 +32,40 @@ function inviteMember({ houseId, email, invitedBy }) {
     throw err;
   }
 
-  db.prepare(
-    'INSERT INTO house_members (id, house_id, user_id, role) VALUES (?, ?, ?, ?)'
-  ).run(uuidv4(), houseId, user.id, 'resident');
+  // Verifica se já existe convite pendente
+  const pendingInvite = db.prepare(
+    "SELECT id FROM invitations WHERE house_id = ? AND invited_user_id = ? AND status = 'pending'"
+  ).get(houseId, user.id);
 
-  return { user_id: user.id, name: user.name, email: user.email, role: 'resident' };
+  if (pendingInvite) {
+    const err = new Error('Já existe um convite pendente para este usuário nesta casa.');
+    err.status = 409;
+    throw err;
+  }
+
+  const invitationId = uuidv4();
+  const inviter = db.prepare('SELECT name FROM users WHERE id = ?').get(invitedBy);
+  const house = db.prepare('SELECT name FROM houses WHERE id = ?').get(houseId);
+
+  db.prepare(
+    'INSERT INTO invitations (id, house_id, invited_user_id, invited_by) VALUES (?, ?, ?, ?)'
+  ).run(invitationId, houseId, user.id, invitedBy);
+
+  createNotification({
+    userId: user.id,
+    type: 'house_invitation',
+    title: 'Convite para casa',
+    body: `${inviter.name} convidou você para entrar na casa "${house.name}". Acesse seus convites para aceitar ou recusar.`,
+    data: { invitation_id: invitationId, house_id: houseId, house_name: house.name },
+  });
+
+  return {
+    invitation_id: invitationId,
+    invited_user: { id: user.id, name: user.name, email: user.email },
+    house_id: houseId,
+    status: 'pending',
+    message: 'Convite enviado. O usuário verá a notificação na tela inicial.',
+  };
 }
 
 function updateRole({ houseId, targetUserId, role, requesterId }) {
@@ -64,6 +95,17 @@ function updateRole({ houseId, targetUserId, role, requesterId }) {
   db.prepare(
     'UPDATE house_members SET role = ? WHERE house_id = ? AND user_id = ?'
   ).run(role, houseId, targetUserId);
+
+  // Notifica o usuário sobre mudança de papel
+  const roleLabels = { admin: 'Administrador', catalog_manager: 'Gestor de Catálogo', resident: 'Residente' };
+  const house = db.prepare('SELECT name FROM houses WHERE id = ?').get(houseId);
+  createNotification({
+    userId: targetUserId,
+    type: 'role_changed',
+    title: 'Seu papel foi alterado',
+    body: `Seu papel na casa "${house.name}" foi atualizado para: ${roleLabels[role] || role}.`,
+    data: { house_id: houseId, new_role: role },
+  });
 }
 
 function updateWeight({ houseId, targetUserId, weightPercentage }) {
@@ -87,7 +129,6 @@ function updateWeight({ houseId, targetUserId, weightPercentage }) {
     'UPDATE house_members SET weight_percentage = ? WHERE house_id = ? AND user_id = ?'
   ).run(weightPercentage, houseId, targetUserId);
 
-  // RN02: validate total weights
   const totalWeight = db.prepare(
     'SELECT SUM(weight_percentage) as total FROM house_members WHERE house_id = ? AND weight_percentage IS NOT NULL'
   ).get(houseId).total || 0;

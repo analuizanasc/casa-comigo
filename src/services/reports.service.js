@@ -102,4 +102,52 @@ function getBalancePanel(houseId) {
   };
 }
 
-module.exports = { getPerformanceReport, getBalancePanel };
+// Relatório individual — acessível ao próprio morador
+function getMyPerformance(houseId, userId, { dateFrom, dateTo }) {
+  const params = [houseId];
+  let dateFilter = '';
+  if (dateFrom) { dateFilter += ' AND ta.scheduled_date >= ?'; params.push(dateFrom); }
+  if (dateTo) { dateFilter += ' AND ta.scheduled_date <= ?'; params.push(dateTo); }
+
+  const member = db.prepare(`
+    SELECT hm.user_id, u.name, hm.role, hm.weight_percentage
+    FROM house_members hm
+    JOIN users u ON hm.user_id = u.id
+    WHERE hm.house_id = ? AND hm.user_id = ?
+  `).get(houseId, userId);
+
+  if (!member) {
+    const err = new Error('Membro não encontrado nesta casa.'); err.status = 404; throw err;
+  }
+
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+      SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue,
+      SUM(CASE WHEN status = 'redistributed' THEN 1 ELSE 0 END) as redistributed,
+      SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
+    FROM task_assignments ta
+    WHERE ta.house_id = ? AND ta.assigned_to = ? ${dateFilter}
+  `).get(houseId, userId, ...params.slice(1));
+
+  const completionRate = stats.total > 0
+    ? parseFloat(((stats.completed / stats.total) * 100).toFixed(1))
+    : 0;
+
+  return {
+    period: { from: dateFrom || null, to: dateTo || null },
+    user_id: member.user_id,
+    name: member.name,
+    role: member.role,
+    weight_percentage: member.weight_percentage,
+    total_assigned: stats.total,
+    completed: stats.completed,
+    overdue: stats.overdue,
+    redistributed: stats.redistributed,
+    pending: stats.pending,
+    completion_rate: completionRate,
+  };
+}
+
+module.exports = { getPerformanceReport, getBalancePanel, getMyPerformance };

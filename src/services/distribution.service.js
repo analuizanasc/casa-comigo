@@ -4,7 +4,6 @@ const db = require('../config/database');
 const EFFORT_WEIGHT = { light: 1, medium: 2, heavy: 3 };
 const PREFERENCE_SCORE = { like: 2, neutral: 0, hate: -3 };
 
-// Parse YYYY-MM-DD date string as UTC to avoid timezone shift issues
 function parseUTCDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d));
@@ -14,25 +13,31 @@ function fmtUTC(d) {
   return d.toISOString().split('T')[0];
 }
 
-// Expand tasks into (task, date) occurrences between start and end dates
-function expandOccurrences(tasks, startDate, endDate) {
-  const start = parseUTCDate(startDate);
-  const end = parseUTCDate(endDate);
-  const occurrences = [];
-
-  tasks.forEach(task => {
-    const dates = getDatesForFrequency(task.frequency, start, end);
-    dates.forEach(date => occurrences.push({ task, date }));
-  });
-
-  return occurrences;
-}
-
-function getDatesForFrequency(frequency, start, end) {
+// Geração de datas para frequência customizada: N vezes por semana/mês/ano
+function getDatesForCustomFrequency(count, unit, start, end) {
+  const UNIT_DAYS = { week: 7, month: 30, year: 365 };
+  const intervalDays = Math.max(1, Math.round(UNIT_DAYS[unit] / count));
   const dates = [];
   const current = new Date(start);
 
-  switch (frequency) {
+  while (current <= end) {
+    dates.push(fmtUTC(current));
+    current.setUTCDate(current.getUTCDate() + intervalDays);
+  }
+
+  return dates;
+}
+
+function getDatesForFrequency(task, start, end) {
+  // Frequência customizada tem prioridade sobre o enum
+  if (task.frequency_count != null && task.frequency_unit != null) {
+    return getDatesForCustomFrequency(task.frequency_count, task.frequency_unit, start, end);
+  }
+
+  const dates = [];
+  const current = new Date(start);
+
+  switch (task.frequency) {
     case 'daily':
       while (current <= end) {
         dates.push(fmtUTC(current));
@@ -74,16 +79,26 @@ function getDatesForFrequency(frequency, start, end) {
   return dates;
 }
 
-// Group task occurrences by (room + dependency chain) for each date — RN01
+function expandOccurrences(tasks, startDate, endDate) {
+  const start = parseUTCDate(startDate);
+  const end = parseUTCDate(endDate);
+  const occurrences = [];
+
+  tasks.forEach(task => {
+    const dates = getDatesForFrequency(task, start, end);
+    dates.forEach(date => occurrences.push({ task, date }));
+  });
+
+  return occurrences;
+}
+
 function groupOccurrencesByRoomAndDependencies(occurrences, allDeps) {
-  // Build adjacency list: task -> depends_on_task
   const depMap = {};
   allDeps.forEach(d => {
     if (!depMap[d.task_id]) depMap[d.task_id] = [];
     depMap[d.task_id].push(d.depends_on_task_id);
   });
 
-  // Group occurrences by date then by (room or dependency group)
   const byDate = {};
   occurrences.forEach(occ => {
     if (!byDate[occ.date]) byDate[occ.date] = [];
@@ -93,11 +108,8 @@ function groupOccurrencesByRoomAndDependencies(occurrences, allDeps) {
   const groups = [];
 
   Object.entries(byDate).forEach(([date, dayOccs]) => {
-    // Find dependency chains within the same day
     const taskIds = new Set(dayOccs.map(o => o.task.id));
-    const visited = new Set();
 
-    // Union-find to group interdependent tasks
     const parent = {};
     dayOccs.forEach(o => { parent[o.task.id] = o.task.id; });
 
@@ -109,7 +121,6 @@ function groupOccurrencesByRoomAndDependencies(occurrences, allDeps) {
       deps.forEach(depId => {
         if (taskIds.has(depId)) union(occ.task.id, depId);
       });
-      // Also group by room
       if (occ.task.room) {
         dayOccs.forEach(other => {
           if (other.task.room === occ.task.room && other.task.id !== occ.task.id) {
@@ -119,7 +130,6 @@ function groupOccurrencesByRoomAndDependencies(occurrences, allDeps) {
       }
     });
 
-    // Build groups from union-find roots
     const groupMap = {};
     dayOccs.forEach(occ => {
       const root = find(occ.task.id);
@@ -128,7 +138,6 @@ function groupOccurrencesByRoomAndDependencies(occurrences, allDeps) {
     });
 
     Object.values(groupMap).forEach(groupOccs => {
-      // Sort within group by dependency order (topological sort)
       const sortedOccs = topologicalSort(groupOccs, depMap);
       groups.push({ date, tasks: sortedOccs });
     });
@@ -153,7 +162,6 @@ function topologicalSort(occs, depMap) {
   while (queue.length > 0) {
     const current = queue.shift();
     sorted.push(current);
-    // Find tasks that depend on current
     occs.forEach(o => {
       const deps = (depMap[o.task.id] || []).filter(d => ids.has(d));
       if (deps.includes(current.task.id)) {
@@ -163,37 +171,62 @@ function topologicalSort(occs, depMap) {
     });
   }
 
-  // Append any remaining (circular ref fallback)
   occs.forEach(o => { if (!sorted.find(s => s.task.id === o.task.id)) sorted.push(o); });
   return sorted;
 }
 
-// Calculate total effort for a group
 function groupEffort(tasks) {
   return tasks.reduce((sum, occ) => sum + EFFORT_WEIGHT[occ.task.effort_level], 0);
 }
 
-// Score a member for a group of tasks
 function scoreMember(member, tasks, prefMap, currentEffort, targetEffort) {
-  // Check physical limitation — RN03
   for (const occ of tasks) {
     const pref = prefMap[`${member.user_id}:${occ.task.id}`];
     if (pref && pref.has_physical_limitation) return -Infinity;
   }
 
-  // Preference score
   let prefScore = 0;
   tasks.forEach(occ => {
     const pref = prefMap[`${member.user_id}:${occ.task.id}`];
     prefScore += PREFERENCE_SCORE[pref?.preference_level || 'neutral'];
   });
 
-  // Load balance score — RN02: prefer member with lowest current/target ratio
-  /* istanbul ignore next -- targetEffort deriva de totalEffort*percent/100, só é 0 com groups vazio (forEach não executa) */
+  /* istanbul ignore next */
   const ratio = targetEffort > 0 ? currentEffort / targetEffort : currentEffort;
   const balanceScore = -ratio * 10;
 
   return prefScore + balanceScore;
+}
+
+// Fallback panorama: quando todos têm limitação física, escolhe quem tem
+// mais tarefas que gosta no quadro atual (in-memory + DB)
+function selectByPanorama(members, houseId, inMemoryAssignments, prefMap) {
+  const likedCount = {};
+  members.forEach(m => { likedCount[m.user_id] = 0; });
+
+  // Tarefas já atribuídas no DB que o membro gosta
+  members.forEach(m => {
+    const dbLiked = db.prepare(`
+      SELECT COUNT(*) as cnt
+      FROM task_assignments ta
+      JOIN member_preferences mp
+        ON mp.user_id = ta.assigned_to AND mp.task_id = ta.task_id AND mp.house_id = ta.house_id
+      WHERE ta.house_id = ? AND ta.assigned_to = ? AND mp.preference_level = 'like' AND ta.status = 'pending'
+    `).get(houseId, m.user_id).cnt;
+    likedCount[m.user_id] += dbLiked;
+  });
+
+  // Tarefas in-memory atribuídas na distribuição corrente que o membro gosta
+  inMemoryAssignments.forEach(a => {
+    const pref = prefMap[`${a.assigned_to}:${a.task_id}`];
+    if (pref && pref.preference_level === 'like') {
+      likedCount[a.assigned_to] = (likedCount[a.assigned_to] || 0) + 1;
+    }
+  });
+
+  return members.reduce((best, m) =>
+    likedCount[m.user_id] > likedCount[best.user_id] ? m : best
+  , members[0]);
 }
 
 function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId }) {
@@ -234,7 +267,6 @@ function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId 
   const prefMap = {};
   prefRows.forEach(p => { prefMap[`${p.user_id}:${p.task_id}`] = p; });
 
-  // RN02: compute target weights
   const membersWithWeights = members.filter(m => m.weight_percentage !== null);
   const usingEqual = membersWithWeights.length === 0;
   const equalWeight = 100 / members.length;
@@ -249,12 +281,10 @@ function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId 
   const occurrences = expandOccurrences(tasks, periodStart, periodEnd);
   const groups = groupOccurrencesByRoomAndDependencies(occurrences, allDeps);
 
-  // Sort groups by total effort descending so heaviest tasks are assigned first
   groups.sort((a, b) => groupEffort(b.tasks) - groupEffort(a.tasks));
 
   const totalEffort = groups.reduce((sum, g) => sum + groupEffort(g.tasks), 0);
 
-  // Scale targets to total effort units
   const effortTargetByMember = {};
   members.forEach(m => {
     effortTargetByMember[m.user_id] = totalEffort * (memberEffortTargets[m.user_id] / 100);
@@ -266,7 +296,6 @@ function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId 
     const effort = groupEffort(group.tasks);
     const groupId = uuidv4();
 
-    // Score each member
     let bestMember = null;
     let bestScore = -Infinity;
 
@@ -283,10 +312,8 @@ function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId 
     });
 
     if (!bestMember) {
-      // All members have physical limitations — assign to member with lowest load
-      bestMember = members.reduce((min, m) =>
-        memberCurrentEffort[m.user_id] < memberCurrentEffort[min.user_id] ? m : min
-      , members[0]);
+      // Todos têm limitação física: usa fallback panorama (quem tem mais tarefas que gosta)
+      bestMember = selectByPanorama(members, houseId, assignments, prefMap);
     }
 
     memberCurrentEffort[bestMember.user_id] += effort;
@@ -306,7 +333,6 @@ function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId 
     });
   });
 
-  // Persist assignments in a transaction
   const insertAssignment = db.prepare(`
     INSERT INTO task_assignments
       (id, house_id, task_id, assigned_to, scheduled_date, status, group_id, sequence_order, distribution_period)
@@ -323,7 +349,6 @@ function distribute({ houseId, periodStart, periodEnd, periodLabel, requesterId 
 
   insertAll(assignments);
 
-  // Balance report
   const house = db.prepare('SELECT tolerance_percentage FROM houses WHERE id = ?').get(houseId);
   const tolerance = house.tolerance_percentage;
 

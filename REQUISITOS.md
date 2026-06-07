@@ -34,13 +34,27 @@
 
 **EP01-US01** — Como administrador, quero criar uma "casa" e convidar moradores, para que todos possam participar do sistema.
 
-**EP01-US02** — Como administrador, quero definir o número de moradores e seus perfis (nome, foto, disponibilidade semanal), para que a distribuição seja personalizada.
+> **Implementação:** convite enviado via **notificação in-app** (não e-mail externo). O usuário convidado precisa já estar cadastrado no sistema. O convite fica com status `pending` até ser aceito ou recusado. Alternativa: o morador pode entrar diretamente usando o `invite_code` da casa via `POST /api/houses/join`.
+
+**EP01-US02** — Como administrador, quero definir o número de moradores e seus perfis (nome, disponibilidade semanal em horas), para que a distribuição seja personalizada.
 
 **EP01-US03** — Como morador, quero acessar o sistema com minha conta, para que eu veja apenas minhas tarefas e informações.
 
 **EP01-US04** — Como administrador, quero conceder a um morador a permissão de **Gestor de Catálogo**, para que ele possa criar, editar e remover tarefas sem precisar ser administrador da casa.
 
+> **Implementação:** `PATCH /api/houses/:houseId/members/:userId/role` com `{ "role": "catalog_manager" }`. O membro é notificado via in-app da mudança de papel.
+
 **EP01-US05** — Como administrador, quero revogar a permissão de Gestor de Catálogo de um morador a qualquer momento, sem remover o membro da casa.
+
+> **Implementação:** mesmo endpoint `PATCH .../role` com `{ "role": "resident" }`.
+
+**EP01-US06** — Como administrador, quero remover um morador da casa, para que ele não tenha mais acesso ao sistema da residência.
+
+> **Implementação:** `DELETE /api/houses/:houseId/members/:userId`. Restrição: o único administrador não pode ser removido.
+
+**EP01-US07** — Como novo usuário, quero passar por um fluxo de onboarding guiado ao entrar no sistema, para entender como configurar minha participação.
+
+> **Implementação:** campo `onboarding_step` no usuário (0–4). Endpoints `GET /api/me/onboarding` e `PATCH /api/me/onboarding` para avançar etapas. 4 etapas no total.
 
 ---
 
@@ -51,9 +65,9 @@
 **EP02-US02** — Como administrador ou gestor de catálogo, quero criar, editar e remover tarefas personalizadas, para adaptar o sistema à realidade da nossa casa.
 
 **EP02-US03** — Como administrador ou gestor de catálogo, quero definir para cada tarefa:
-- Frequência (diária, semanal, quinzenal, mensal, trimestral, anual)
-- Duração estimada
-- Nível de esforço (leve, médio, pesado)
+- Frequência (diária, semanal, quinzenal, mensal, trimestral, anual) **ou frequência personalizada** (ex.: "a cada 3 semanas") via `frequency_count` + `frequency_unit` (`week`/`month`/`year`)
+- Duração estimada (em minutos)
+- Nível de esforço (leve `light`, médio `medium`, pesado `heavy`)
 - Cômodo/área da casa associada
 - Dependências de ordem com outras tarefas (ex.: "espanar" deve preceder "varrer")
 
@@ -106,9 +120,11 @@ Exemplos de uso:
 
 **EP04-US05** — Como sistema, quero redistribuir automaticamente uma tarefa quando o morador reportar impedimento, para que ela não fique sem responsável.
 
-> **Regra de negócio RN04:** Redistribuição automática não pode aumentar carga de morador que já está no limite de esforço definido pelo seu peso.
+> **Regra de negócio RN04:** Redistribuição automática não pode aumentar carga de morador que já está no limite de esforço definido pelo seu peso. Quando todos os membros elegíveis estão no limite, o sistema redistribui para o de menor carga **e** envia notificação in-app a todos os administradores alertando sobre o sobrecarga.
 
 > **Regra de negócio RN05:** Tarefas com frequência semanal ou maior não podem ficar sem responsável por mais de 2 dias corridos.
+
+> **Comportamento de reatribuição manual em grupos:** Ao reatribuir manualmente uma tarefa que pertence a um grupo com dependências (drag-and-drop), o sistema retorna `requires_confirmation: true` com as opções "mover apenas esta tarefa" (`force: true`) ou "mover todo o grupo" (`move_group: true`). O usuário confirma a intenção antes da operação ser efetivada.
 
 ---
 
@@ -128,24 +144,32 @@ Exemplos de uso:
 
 ### EP06 — Lembretes e Notificações
 
-> Na versão web inicial, notificações são entregues por **e-mail** e por **alertas in-app**. Push notification é funcionalidade prevista para fase futura com app mobile.
+> **Status de implementação:** A v1 implementou **notificações in-app** com persistência em banco. E-mail transacional e push notification são funcionalidades previstas para fases futuras.
 
-| Tipo de lembrete | Canal (Web v1) | Canal (Futuro mobile) |
-|-----------------|----------------|----------------------|
-| Resumo diário de tarefas | E-mail + in-app | Push + e-mail |
-| Tarefa não concluída no fim do dia | E-mail | Push |
-| Resumo semanal para admin | E-mail | Push + e-mail |
-| Redistribuição atribuída a você | In-app + e-mail | Push |
+| Tipo de notificação | Canal (v1 — implementado) | Canal (Fase futura) |
+|---------------------|--------------------------|---------------------|
+| Convite para casa | In-app (`house_invitation`) | E-mail |
+| Mudança de papel (role) | In-app (`role_changed`) | E-mail |
+| Redistribuição atribuída a você | In-app (`task_redistributed`) | Push + e-mail |
+| Tarefa concluída por outro morador | In-app (`task_completed_by_other`) | — |
+| Aviso de sobrecarga (todos no limite) | In-app para admins (`overload_warning`) | E-mail |
+| Resumo diário de tarefas | *(não implementado)* | E-mail + in-app |
+| Tarefa não concluída no fim do dia | *(não implementado)* | E-mail |
+| Resumo semanal para admin | *(não implementado)* | E-mail |
 
-**EP06-US01** — Como morador, quero receber um e-mail no início do dia com resumo das minhas tarefas do dia, para não esquecer nada.
+**EP06-US01** — Como morador, quero receber notificações in-app sobre eventos relevantes da casa (convites, redistribuições, mudanças de papel), para ser informado sem depender de e-mail.
 
-**EP06-US02** — Como morador, quero configurar o horário de envio do meu e-mail de lembrete diário, para que chegue quando for mais útil.
+> **Implementação:** `GET /api/notifications` lista notificações não lidas; `PATCH /api/notifications/:id/read` marca uma; `PATCH /api/notifications/read-all` marca todas.
 
-**EP06-US03** — Como morador, quero receber um e-mail de tarefa não concluída ao final do dia, para decidir se concluo ou reprogramo.
+**EP06-US02** *(fase futura)* — Como morador, quero receber um e-mail no início do dia com resumo das minhas tarefas do dia, para não esquecer nada.
 
-**EP06-US04** — Como administrador, quero receber um resumo semanal por e-mail do status da casa (% concluído, tarefas em atraso), para acompanhar sem precisar abrir o sistema.
+**EP06-US03** *(fase futura)* — Como morador, quero configurar o horário de envio do meu e-mail de lembrete diário, para que chegue quando for mais útil.
 
-**EP06-US05** — Como morador, quero ver um banner de alertas ao abrir o sistema com as tarefas do dia e eventuais pendências, para não depender de verificar o e-mail.
+**EP06-US04** *(fase futura)* — Como morador, quero receber um e-mail de tarefa não concluída ao final do dia, para decidir se concluo ou reprogramo.
+
+**EP06-US05** *(fase futura)* — Como administrador, quero receber um resumo semanal por e-mail do status da casa (% concluído, tarefas em atraso), para acompanhar sem precisar abrir o sistema.
+
+**EP06-US06** — Como morador, quero ver minhas notificações ao abrir o sistema com convites, redistribuições e alertas pendentes, para agir rapidamente.
 
 ---
 
@@ -153,11 +177,21 @@ Exemplos de uso:
 
 **EP07-US01** — Como morador, quero marcar uma tarefa como concluída com um toque, para registrar minha execução.
 
+> **Implementação:** `POST /api/houses/:houseId/schedule/:assignmentId/complete`. Qualquer membro da casa pode concluir uma tarefa (não apenas o responsável atribuído). O campo `completed_by` registra quem de fato concluiu. Se um membro conclui em nome de outro, o responsável original recebe notificação in-app do tipo `task_completed_by_other`.
+
 **EP07-US02** — Como morador, quero adicionar uma observação ao concluir uma tarefa (ex.: "produto acabou", "precisa de manutenção"), para comunicar algo aos outros moradores.
 
-**EP07-US03** — Como administrador, quero visualizar relatórios de desempenho por morador (tarefas concluídas, atrasadas, evitadas), para conversas de alinhamento justas.
+> **Implementação:** campo opcional `completion_notes` no body do endpoint de conclusão.
 
-**EP07-US04** — Como sistema, quero manter histórico de execução de até 2 anos, para análise de padrões e melhoria da distribuição futura.
+**EP07-US03** — Como administrador, quero visualizar relatórios de desempenho por morador (tarefas concluídas, atrasadas, redistribuídas, pendentes e taxa de conclusão), para conversas de alinhamento justas.
+
+> **Implementação:** `GET /api/houses/:houseId/reports/performance` (admin) e `GET /api/houses/:houseId/reports/balance` (painel de equilíbrio). Ambos aceitam filtros opcionais `date_from` e `date_to`.
+
+**EP07-US04** — Como morador, quero visualizar meu próprio relatório de desempenho, para acompanhar minha participação sem depender do administrador.
+
+> **Implementação:** `GET /api/houses/:houseId/reports/my-performance` — acessível por qualquer morador; retorna apenas os dados do próprio usuário. Aceita filtros `date_from` e `date_to`.
+
+**EP07-US05** — Como sistema, quero manter histórico de execução de até 2 anos, para análise de padrões e melhoria da distribuição futura.
 
 ---
 
@@ -171,21 +205,41 @@ Exemplos de uso:
 | RNF04 | Disponibilidade | Sistema disponível 99,5% do tempo |
 | RNF05 | Segurança | Dados de uma casa nunca visíveis para moradores de outra casa |
 | RNF06 | Offline | Visualização do cronograma e marcação de conclusão funcionam offline no browser, sincronizando ao reconectar |
-| RNF07 | Notificações | v1: e-mail transacional + alertas in-app. Push notification previsto para fase mobile |
+| RNF07 | Notificações | v1: alertas in-app com persistência em banco (implementado). E-mail transacional previsto para v2; Push notification para fase mobile |
 | RNF08 | Acessibilidade | Contraste e tamanho de fonte acessíveis (WCAG AA) |
 
 ---
 
 ## Regras de Negócio Consolidadas
 
-| ID | Regra |
-|----|-------|
-| RN01 | Tarefas com dependência de ordem são sempre agendadas em sequência na mesma sessão |
-| RN02 | Distribuição de esforço segue pesos % por morador (somam 100%); desvio tolerado ±10pp (configurável); sem pesos definidos aplica distribuição igualitária |
-| RN03 | Tarefa com limitação física registrada nunca é atribuída ao morador limitado |
-| RN04 | Redistribuição automática não pode aumentar carga de morador que já está no limite de esforço pelo seu peso |
-| RN05 | Tarefas com frequência semanal ou maior não podem ficar sem responsável por mais de 2 dias corridos |
-| RN06 | Três níveis de acesso: Administrador (tudo), Gestor de Catálogo (catálogo + leitura), Morador (próprias tarefas) |
-| RN07 | Ao alterar pesos de distribuição, sistema pergunta se redistribui períodos futuros ou mantém planejamento atual |
+| ID | Regra | Status |
+|----|-------|--------|
+| RN01 | Tarefas com dependência de ordem são sempre agendadas em sequência na mesma sessão | Implementado |
+| RN02 | Distribuição de esforço segue pesos % por morador (somam 100%); desvio tolerado ±10pp (configurável via `PATCH /houses/:id/tolerance`); sem pesos definidos aplica distribuição igualitária | Implementado |
+| RN03 | Tarefa com limitação física registrada nunca é atribuída ao morador limitado na distribuição automática; reatribuição manual exibe aviso mas permite prosseguir | Implementado |
+| RN04 | Redistribuição automática escolhe membro com menor carga; se todos estão no limite, redistribui para o de menor carga e notifica admins via in-app (`overload_warning`) | Implementado |
+| RN05 | Tarefas com frequência semanal ou maior não podem ficar sem responsável por mais de 2 dias corridos | Planejado |
+| RN06 | Três níveis de acesso: Administrador (tudo), Gestor de Catálogo (catálogo + visualização completa), Morador (próprias tarefas + relatório próprio) | Implementado |
+| RN07 | Ao alterar pesos de distribuição, sistema retorna campo `warning` indicando que os pesos estão desbalanceados; redistribuição de períodos futuros é decisão manual do admin | Implementado |
+| RN08 | Convite para casa requer que o usuário já esteja cadastrado no sistema; convite fica pendente até aceite/recusa; duplicatas são bloqueadas | Implementado |
+| RN09 | Qualquer membro da casa pode concluir uma tarefa (não apenas o responsável atribuído); `completed_by` registra o executor real | Implementado |
+
+---
+
+## Modelo de Dados
+
+### Tabelas implementadas
+
+| Tabela | Descrição |
+|--------|-----------|
+| `users` | Usuários do sistema; inclui `onboarding_step` (0–4) |
+| `houses` | Residências; `invite_code` único para ingresso; `tolerance_percentage` (padrão 10) |
+| `house_members` | Vínculo usuário↔casa; `role` (`admin`/`catalog_manager`/`resident`); `weight_percentage`; `weekly_availability_hours` |
+| `task_catalog` | Catálogo de tarefas; suporta frequência enumerada **ou** `frequency_count` + `frequency_unit` |
+| `task_dependencies` | Dependências de ordem entre tarefas (auto-referência em `task_catalog`) |
+| `member_preferences` | Preferência por tarefa (`hate`/`neutral`/`like`) e flag de limitação física |
+| `task_assignments` | Atribuições geradas pela distribuição; `status` (`pending`/`completed`/`overdue`/`redistributed`); `group_id` agrupa tarefas dependentes; `completed_by` registra executor real |
+| `notifications` | Notificações in-app persistidas; tipos: `house_invitation`, `role_changed`, `task_redistributed`, `task_completed_by_other`, `overload_warning` |
+| `invitations` | Convites enviados (`pending`/`accepted`/`rejected`) |
 
 ---

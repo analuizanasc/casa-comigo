@@ -19,4 +19,14 @@ function getBalancePanel(req, res) {
   }
 }
 
-module.exports = { getPerformanceReport, getBalancePanel };
+function getMyPerformance(req, res) {
+  try {
+    const { date_from, date_to } = req.query;
+    const report = reportsService.getMyPerformance(req.params.houseId, req.user.id, { dateFrom: date_from, dateTo: date_to });
+    return res.status(200).json(report);
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
+module.exports = { getPerformanceReport, getBalancePanel, getMyPerformance };

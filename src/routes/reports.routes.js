@@ -8,5 +8,7 @@ router.use(authenticate, requireHouseMember);
 
 router.get('/performance', requireAdmin, reportsController.getPerformanceReport);
 router.get('/balance', requireAdmin, reportsController.getBalancePanel);
+// Acessível por qualquer morador — retorna apenas os próprios dados
+router.get('/my-performance', reportsController.getMyPerformance);
 
 module.exports = router;
