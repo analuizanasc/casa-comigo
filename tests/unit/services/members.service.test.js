@@ -39,14 +39,18 @@ describe('inviteMember', () => {
   test('MS02 – convida usuário existente com sucesso', () => {
     uuidv4.mockReturnValue('new-member-id');
     db.prepare
-      .mockReturnValueOnce(makeStmt({ get: { id: 'u2', name: 'Bob', email: 'bob@test.com' } }))
-      .mockReturnValueOnce(makeStmt({ get: null }))   // não é membro ainda
-      .mockReturnValueOnce(makeStmt());               // INSERT
+      .mockReturnValueOnce(makeStmt({ get: { id: 'u2', name: 'Bob', email: 'bob@test.com' } })) // find user
+      .mockReturnValueOnce(makeStmt({ get: null }))                          // não é membro ainda
+      .mockReturnValueOnce(makeStmt({ get: null }))                          // sem convite pendente
+      .mockReturnValueOnce(makeStmt({ get: { name: 'Ana' } }))              // nome do inviter
+      .mockReturnValueOnce(makeStmt({ get: { name: 'Casa Legal' } }))       // nome da casa
+      .mockReturnValueOnce(makeStmt())                                       // INSERT invitation
+      .mockReturnValueOnce(makeStmt());                                      // INSERT notification
 
     const result = inviteMember({ houseId: 'h1', email: 'bob@test.com', invitedBy: 'u1' });
 
-    expect(result.role).toBe('resident');
-    expect(result.name).toBe('Bob');
+    expect(result.status).toBe('pending');
+    expect(result.invited_user.name).toBe('Bob');
   });
 
   test('MS03 – lança 404 se e-mail não está cadastrado', () => {
@@ -77,8 +81,10 @@ describe('inviteMember', () => {
 describe('updateRole', () => {
   test('MS05 – atualiza papel com sucesso', () => {
     db.prepare
-      .mockReturnValueOnce(makeStmt({ get: { id: 'm1' } }))  // find member
-      .mockReturnValueOnce(makeStmt());                       // UPDATE
+      .mockReturnValueOnce(makeStmt({ get: { id: 'm1' } }))           // find member
+      .mockReturnValueOnce(makeStmt())                                 // UPDATE role
+      .mockReturnValueOnce(makeStmt({ get: { name: 'Casa Legal' } })) // nome da casa (notificação)
+      .mockReturnValueOnce(makeStmt());                                // INSERT notification
 
     expect(() => updateRole({ houseId: 'h1', targetUserId: 'u2', role: 'catalog_manager', requesterId: 'u1' })).not.toThrow();
   });

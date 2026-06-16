@@ -121,18 +121,18 @@ describe('reassignTask', () => {
     expect(err.message).toMatch(/membro/);
   });
 
-  test('SC09 – lança 400 se novo responsável tem limitação física para a tarefa (RN03)', () => {
+  test('SC09 – retorna warning quando novo responsável tem limitação física (RN03 não bloqueia reatribuição manual)', () => {
     db.prepare
       .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))
       .mockReturnValueOnce(makeStmt({ get: { id: 'm2' } }))
-      .mockReturnValueOnce(makeStmt({ get: { has_physical_limitation: 1 } })); // tem limitação
+      .mockReturnValueOnce(makeStmt({ get: { has_physical_limitation: 1 } })) // tem limitação
+      .mockReturnValueOnce(makeStmt())                                         // UPDATE assigned_to
+      .mockReturnValueOnce(makeStmt({ get: { ...fakeAssignment, assigned_to: 'u2' } })); // getAssignment após
 
-    let err;
-    try { reassignTask({ assignmentId: 'a1', houseId: 'h1', newUserId: 'u2' }); }
-    catch (e) { err = e; }
+    const result = reassignTask({ assignmentId: 'a1', houseId: 'h1', newUserId: 'u2' });
 
-    expect(err.status).toBe(400);
-    expect(err.message).toMatch(/limitação física/);
+    expect(result.warning).toMatch(/limitação física/);
+    expect(result.assigned_to).toBe('u2');
   });
 });
 
@@ -143,6 +143,7 @@ describe('completeTask', () => {
     const completedAssignment = { ...fakeAssignment, status: 'completed', completion_notes: 'ok' };
     db.prepare
       .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))          // getAssignment
+      .mockReturnValueOnce(makeStmt({ get: { id: 'm1' } }))            // member check
       .mockReturnValueOnce(makeStmt())                                 // UPDATE
       .mockReturnValueOnce(makeStmt({ get: completedAssignment }));    // getAssignment após
 
@@ -166,6 +167,7 @@ describe('completeTask', () => {
     const completedAssignment = { ...fakeAssignment, status: 'completed', completion_notes: null };
     db.prepare
       .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))
+      .mockReturnValueOnce(makeStmt({ get: { id: 'm1' } }))  // member check
       .mockReturnValueOnce(makeStmt())
       .mockReturnValueOnce(makeStmt({ get: completedAssignment }));
 
@@ -174,14 +176,17 @@ describe('completeTask', () => {
     expect(result.completion_notes).toBeNull();
   });
 
-  test('SC12 – lança 403 se tarefa pertence a outro usuário', () => {
-    db.prepare.mockReturnValueOnce(makeStmt({ get: { ...fakeAssignment, assigned_to: 'u99' } }));
+  test('SC12 – lança 403 se usuário não é membro da casa', () => {
+    db.prepare
+      .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))  // getAssignment
+      .mockReturnValueOnce(makeStmt({ get: null }));           // member check → null → 403
 
     let err;
-    try { completeTask({ assignmentId: 'a1', houseId: 'h1', userId: 'u1', completionNotes: null }); }
+    try { completeTask({ assignmentId: 'a1', houseId: 'h1', userId: 'u99', completionNotes: null }); }
     catch (e) { err = e; }
 
     expect(err.status).toBe(403);
+    expect(err.message).toMatch(/membro/);
   });
 });
 
@@ -191,19 +196,23 @@ describe('reportImpediment', () => {
   test('SC13 – redistribui tarefa para membro com menor carga (RN04)', () => {
     const newAssignment = { ...fakeAssignment, id: 'a2', assigned_to: 'u2' };
 
-    // Sequência exata de db.prepare no reportImpediment:
+    // Sequência exata de db.prepare no reportImpediment (1 membro elegível u2):
     // [1] getAssignment  [2] UPDATE redistributed  [3] SELECT members
-    // [4] limitação u2   [5] SELECT house tolerance (usado internamente, não influencia lógica)
-    // [6] COUNT carga u2  [7] INSERT nova  [8] getAssignment nova
+    // [4] limitação u2   [5] COUNT total tasks  [6] SELECT all house members (usingEqual)
+    // [7] COUNT carga u2 (bestMember loop)  [8] COUNT carga u2 (allAtLimit loop)
+    // [9] INSERT nova atribuição  [10] INSERT notification  [11] getAssignment final
     db.prepare
       .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))
       .mockReturnValueOnce(makeStmt())
       .mockReturnValueOnce(makeStmt({ all: [{ user_id: 'u2', weight_percentage: 50, role: 'resident' }] }))
-      .mockReturnValueOnce(makeStmt({ get: null }))
-      .mockReturnValueOnce(makeStmt({ get: { tolerance_percentage: 10 } }))
-      .mockReturnValueOnce(makeStmt({ get: { cnt: 2 } }))
-      .mockReturnValueOnce(makeStmt())
-      .mockReturnValueOnce(makeStmt({ get: newAssignment }));
+      .mockReturnValueOnce(makeStmt({ get: null }))                              // u2 sem limitação
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 5 } }))                        // total tasks
+      .mockReturnValueOnce(makeStmt({ all: [{ user_id: 'u1', weight_percentage: 50 }, { user_id: 'u2', weight_percentage: 50 }] })) // all house members
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 2 } }))                        // carga u2 (bestMember loop)
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 2 } }))                        // carga u2 (allAtLimit loop) → 2 >= 2.5? false
+      .mockReturnValueOnce(makeStmt())                                            // INSERT nova atribuição
+      .mockReturnValueOnce(makeStmt())                                            // INSERT notification (createNotification)
+      .mockReturnValueOnce(makeStmt({ get: newAssignment }));                    // getAssignment final
 
     const result = reportImpediment({ assignmentId: 'a1', houseId: 'h1', userId: 'u1' });
 
@@ -233,6 +242,13 @@ describe('reportImpediment', () => {
   test('SC13b – mantém membro com menor carga entre múltiplos elegíveis (branch load >= bestLoad)', () => {
     const newAssignment = { ...fakeAssignment, id: 'a2', assigned_to: 'u2' };
 
+    // Sequência com 2 elegíveis [u2, u3]:
+    // [1] getAssignment  [2] UPDATE redistributed  [3] SELECT members
+    // [4] limitação u2  [5] limitação u3
+    // [6] COUNT total tasks  [7] SELECT all house members (usingEqual)
+    // [8] COUNT carga u2 (bestMember loop) → 1  [9] COUNT carga u3 (bestMember loop) → 5 ≥ 1? false → u2 permanece
+    // [10] COUNT carga u2 (allAtLimit loop) → 1 ≥ target? false → every para aqui (short-circuit)
+    // [11] INSERT nova  [12] INSERT notification  [13] getAssignment final
     db.prepare
       .mockReturnValueOnce(makeStmt({ get: fakeAssignment }))
       .mockReturnValueOnce(makeStmt())
@@ -242,11 +258,14 @@ describe('reportImpediment', () => {
       ]}))
       .mockReturnValueOnce(makeStmt({ get: null }))   // u2 sem limitação
       .mockReturnValueOnce(makeStmt({ get: null }))   // u3 sem limitação
-      .mockReturnValueOnce(makeStmt({ get: { tolerance_percentage: 10 } }))
-      .mockReturnValueOnce(makeStmt({ get: { cnt: 1 } }))   // carga u2 = 1 (menor → bestMember)
-      .mockReturnValueOnce(makeStmt({ get: { cnt: 5 } }))   // carga u3 = 5 → 5 < 1 false → branch!
-      .mockReturnValueOnce(makeStmt())
-      .mockReturnValueOnce(makeStmt({ get: newAssignment }));
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 10 } }))  // total tasks
+      .mockReturnValueOnce(makeStmt({ all: [{ user_id: 'u1', weight_percentage: 50 }, { user_id: 'u2', weight_percentage: 50 }] })) // all house members
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 1 } }))   // carga u2 (bestMember loop) → bestLoad=1, bestMember=u2
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 5 } }))   // carga u3 (bestMember loop) → 5 < 1? false → branch!
+      .mockReturnValueOnce(makeStmt({ get: { cnt: 1 } }))   // carga u2 (allAtLimit loop) → 1 ≥ 5? false → every para
+      .mockReturnValueOnce(makeStmt())                       // INSERT nova atribuição
+      .mockReturnValueOnce(makeStmt())                       // INSERT notification
+      .mockReturnValueOnce(makeStmt({ get: newAssignment })); // getAssignment final
 
     const result = reportImpediment({ assignmentId: 'a1', houseId: 'h1', userId: 'u1' });
     expect(result.assigned_to).toBe('u2');

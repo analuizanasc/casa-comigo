@@ -162,11 +162,13 @@ describe('updateTask', () => {
 describe('deleteTask', () => {
   test('CT12 – marca tarefa como inativa (soft delete)', () => {
     db.prepare
-      .mockReturnValueOnce(makeStmt({ get: { id: 't1' } }))
-      .mockReturnValueOnce(makeStmt());
+      .mockReturnValueOnce(makeStmt({ get: { id: 't1', name: 'Varrer' } })) // exists check
+      .mockReturnValueOnce(makeStmt({ all: [] }))                            // affected assignments (vazio, sem notificações)
+      .mockReturnValueOnce(makeStmt())                                       // DELETE assignments (dentro da transaction)
+      .mockReturnValueOnce(makeStmt());                                      // UPDATE is_active (dentro da transaction)
 
     expect(() => deleteTask('t1', 'h1')).not.toThrow();
-    expect(db.prepare).toHaveBeenCalledTimes(2);
+    expect(db.prepare).toHaveBeenCalledTimes(4);
   });
 
   test('CT13 – lança 404 se tarefa não existe', () => {
