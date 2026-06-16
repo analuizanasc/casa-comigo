@@ -1,0 +1,7 @@
+{
+  "admin": { "name": "Admin Role", "email": "admin.role@test.com", "password": "senha123" },
+  "morador": { "name": "Morador Role", "email": "morador.role@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Role Test",
+  "papeis": ["admin", "catalog_manager", "resident"],
+  "papelInvalido": "superusuario"
+}

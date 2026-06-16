@@ -1,0 +1,8 @@
+{
+  "admin": { "name": "Admin Disponibilidade", "email": "admin.avail@test.com", "password": "senha123" },
+  "morador": { "name": "Morador Disponibilidade", "email": "morador.avail@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Disponibilidade",
+  "horasValidas": 10,
+  "horasZero": 0,
+  "horasNegativas": -1
+}

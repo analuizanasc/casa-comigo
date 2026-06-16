@@ -1,0 +1,11 @@
+{
+  "admin": { "name": "Admin Peso Individual", "email": "admin.wttest@test.com", "password": "senha123" },
+  "moradorA": { "name": "Morador Wt A", "email": "morador.wta@test.com", "password": "senha123" },
+  "moradorB": { "name": "Morador Wt B", "email": "morador.wtb@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Peso Individual",
+  "pesoValido": 40,
+  "pesoZero": 0,
+  "pesoMaximo": 100,
+  "pesoNegativo": -1,
+  "pesoAcimaMaximo": 101
+}

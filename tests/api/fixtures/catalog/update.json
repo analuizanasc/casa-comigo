@@ -1,0 +1,26 @@
+{
+  "admin": { "name": "Admin CatUpd", "email": "admin.catupd@test.com", "password": "senha123" },
+  "gestor": { "name": "Gestor CatUpd", "email": "gestor.catupd@test.com", "password": "senha123" },
+  "morador": { "name": "Morador CatUpd", "email": "morador.catupd@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Catálogo Update",
+  "tarefaOriginal": {
+    "name": "Tarefa Original",
+    "frequency": "weekly",
+    "effort_level": "light",
+    "room": "Sala",
+    "duration_minutes": 20
+  },
+  "tarefaAtualizada": {
+    "name": "Tarefa Atualizada",
+    "frequency": "monthly",
+    "effort_level": "medium",
+    "room": "Cozinha",
+    "duration_minutes": 45,
+    "description": "Descrição atualizada"
+  },
+  "tarefaInvalida": {
+    "name": "",
+    "frequency": "semanal",
+    "effort_level": "extremo"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "admin": { "name": "Admin Pref", "email": "admin.pref@test.com", "password": "senha123" },
+  "morador": { "name": "Morador Pref", "email": "morador.pref@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Preferências",
+  "tarefa": { "name": "Lavar roupa (Pref)", "frequency": "weekly", "effort_level": "medium" },
+  "preferenciaValida": { "preference_level": "like", "has_physical_limitation": false },
+  "preferenciaOdio": { "preference_level": "hate", "has_physical_limitation": false },
+  "preferenciaLimitacao": { "preference_level": "neutral", "has_physical_limitation": true },
+  "preferenciaInvalida": { "preference_level": "detesto" }
+}

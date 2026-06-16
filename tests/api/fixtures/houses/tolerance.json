@@ -1,0 +1,10 @@
+{
+  "admin": { "name": "Admin Tolerância", "email": "admin.tol@test.com", "password": "senha123" },
+  "morador": { "name": "Morador Tolerância", "email": "morador.tol@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Tolerância Test",
+  "toleranciaValida": 15,
+  "toleranciaMinima": 1,
+  "toleranciaMaxima": 50,
+  "toleranciaAbaixoMinimo": 0,
+  "toleranciaAcimaMaximo": 51
+}

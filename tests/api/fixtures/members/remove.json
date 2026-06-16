@@ -1,0 +1,6 @@
+{
+  "admin": { "name": "Admin Remove", "email": "admin.remove@test.com", "password": "senha123" },
+  "moradorA": { "name": "Morador Remove A", "email": "morador.removea@test.com", "password": "senha123" },
+  "moradorB": { "name": "Morador Remove B", "email": "morador.removeb@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Remove Membro"
+}

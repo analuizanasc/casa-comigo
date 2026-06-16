@@ -1,0 +1,13 @@
+{
+  "casaA": {
+    "admin":  { "name": "Admin Casa A",    "email": "admin.sec.a@test.com",   "password": "senha123" },
+    "membro": { "name": "Membro Casa A",   "email": "membro.sec.a@test.com",  "password": "senha123" },
+    "nomeCasa": "Casa Segurança A"
+  },
+  "casaB": {
+    "admin":  { "name": "Admin Casa B",    "email": "admin.sec.b@test.com",   "password": "senha123" },
+    "nomeCasa": "Casa Segurança B"
+  },
+  "intruso": { "name": "Intruso",          "email": "intruso.sec@test.com",   "password": "senha123" },
+  "tarefa": { "name": "Tarefa Segurança", "frequency": "weekly", "effort_level": "light", "room": "Sala" }
+}

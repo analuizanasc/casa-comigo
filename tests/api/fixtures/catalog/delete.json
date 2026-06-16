@@ -1,0 +1,7 @@
+{
+  "admin": { "name": "Admin CatDel", "email": "admin.catdel@test.com", "password": "senha123" },
+  "gestor": { "name": "Gestor CatDel", "email": "gestor.catdel@test.com", "password": "senha123" },
+  "morador": { "name": "Morador CatDel", "email": "morador.catdel@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Catálogo Delete",
+  "tarefa": { "name": "Tarefa Para Deletar", "frequency": "weekly", "effort_level": "light" }
+}

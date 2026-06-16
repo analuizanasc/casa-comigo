@@ -1,0 +1,60 @@
+#ci
+
+name: 'CI - integração contínua'
+
+on: 
+    workflow_dispatch: 
+
+    push:
+        branches: [main, develop]
+
+    schedule: 
+        - cron: '0 6 * * 1-5'
+
+jobs:
+    #nome do job
+    validacoes-estaticas:
+        #maquina que o job vai rodar
+        runs-on: ubuntu-latest
+        steps: 
+            #clone do projeto
+            - uses: actions/checkout@v4
+            #instalacao de node
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 20
+            #instalar dependencias
+            - name: Instalar dependencia
+              run: npm ci
+            - name: Lint
+              run: npm run lint
+    testes-de-unidade-e-integracao:
+        #maquina que o job vai rodar
+        runs-on: ubuntu-latest
+        needs: [validacoes-estaticas]
+        steps: 
+            #clone do projeto
+            - uses: actions/checkout@v4
+            #instalacao de node
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 20
+            - name: Instalar dependencia
+              run: npm ci
+            - name : testes unitarios
+              run: npm run test
+            - name: Rodar testes de integração
+              run: npm run test:api
+            - name: Salvando relatório de testes
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                name: relatorio-testes
+                path: src/tests/api/reports/relatorio-api.html
+    deploy:
+        runs-on: ubuntu-latest
+        needs: [validacoes-estaticas, testes-de-unidade-e-integracao]
+
+        steps:
+            - name: Simulação de Deploy
+              run: echo 'deply sendo realizado...'
