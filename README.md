@@ -89,86 +89,6 @@ O token é obtido via `POST /api/auth/login`.
 | `catalog_manager` | Administrador | Gerencia catálogo + lê cronograma completo |
 | `resident` | Padrão ao entrar | Vê/conclui suas tarefas + registra preferências |
 
-## Endpoints
-
-### Autenticação
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| POST | `/api/auth/register` | Cadastrar usuário |
-| POST | `/api/auth/login` | Login e obtenção de token JWT |
-
-### Casas
-| Método | Rota | Acesso | Descrição |
-|--------|------|--------|-----------|
-| POST | `/api/houses` | Autenticado | Criar casa (vira admin) |
-| GET | `/api/houses/me` | Autenticado | Listar minhas casas |
-| POST | `/api/houses/join` | Autenticado | Entrar via código de convite |
-| GET | `/api/houses/:houseId` | Membro | Detalhes da casa |
-| PATCH | `/api/houses/:houseId/tolerance` | Admin | Ajustar tolerância de balanceamento |
-
-### Membros
-| Método | Rota | Acesso | Descrição |
-|--------|------|--------|-----------|
-| GET | `/api/houses/:houseId/members` | Membro | Listar membros |
-| POST | `/api/houses/:houseId/members/invite` | Admin | Convidar por e-mail |
-| GET | `/api/houses/:houseId/members/weights` | Admin | Painel de pesos |
-| PUT | `/api/houses/:houseId/members/:userId/role` | Admin | Alterar papel |
-| PUT | `/api/houses/:houseId/members/:userId/weight` | Admin | Definir peso (%) |
-| PUT | `/api/houses/:houseId/members/:userId/availability` | Membro | Atualizar disponibilidade |
-| DELETE | `/api/houses/:houseId/members/:userId` | Admin | Remover membro |
-
-### Catálogo de Tarefas
-| Método | Rota | Acesso | Descrição |
-|--------|------|--------|-----------|
-| GET | `/api/houses/:houseId/catalog` | Membro | Listar tarefas |
-| GET | `/api/houses/:houseId/catalog/:taskId` | Membro | Detalhe + dependências |
-| POST | `/api/houses/:houseId/catalog` | Admin/Gestor | Criar tarefa |
-| PUT | `/api/houses/:houseId/catalog/:taskId` | Admin/Gestor | Editar tarefa |
-| DELETE | `/api/houses/:houseId/catalog/:taskId` | Admin/Gestor | Remover tarefa |
-| POST | `/api/houses/:houseId/catalog/:taskId/dependencies` | Admin/Gestor | Adicionar dependência de ordem |
-| DELETE | `/api/houses/:houseId/catalog/:taskId/dependencies/:dependsOnId` | Admin/Gestor | Remover dependência |
-
-### Preferências
-| Método | Rota | Acesso | Descrição |
-|--------|------|--------|-----------|
-| GET | `/api/houses/:houseId/preferences` | Membro | Minhas preferências |
-| PUT | `/api/houses/:houseId/preferences/:taskId` | Membro | Definir preferência (hate/neutral/like) + limitação física |
-| GET | `/api/houses/:houseId/preferences/member/:userId` | Admin | Preferências de outro membro |
-
-### Cronograma / Distribuição
-| Método | Rota | Acesso | Descrição |
-|--------|------|--------|-----------|
-| POST | `/api/houses/:houseId/schedule/distribute` | Admin | Gerar distribuição automática |
-| GET | `/api/houses/:houseId/schedule` | Membro | Consultar cronograma |
-| GET | `/api/houses/:houseId/schedule/:assignmentId` | Membro | Detalhe de atribuição |
-| PUT | `/api/houses/:houseId/schedule/:assignmentId/reassign` | Admin | Reatribuir manualmente |
-| PATCH | `/api/houses/:houseId/schedule/:assignmentId/complete` | Membro | Marcar como concluída |
-| PATCH | `/api/houses/:houseId/schedule/:assignmentId/impediment` | Membro | Reportar impedimento (redistribui automaticamente) |
-
-### Relatórios
-| Método | Rota | Acesso | Descrição |
-|--------|------|--------|-----------|
-| GET | `/api/houses/:houseId/reports/performance` | Admin | Desempenho por morador |
-| GET | `/api/houses/:houseId/reports/balance` | Admin | Painel de balanceamento de esforço |
-
-### Sistema
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/api/health` | Health check |
-| GET | `/api/docs` | Swagger UI |
-
-## Regras de negócio implementadas
-
-| ID | Regra | Onde aplicada |
-|----|-------|---------------|
-| RN01 | Tarefas com dependência de ordem agendadas em sequência | `distribution.service.js` — topological sort + group_id |
-| RN02 | Distribuição segue pesos %; desvio tolerado ±10pp (configurável) | `distribution.service.js` + `PATCH /tolerance` |
-| RN03 | Limitação física nunca atribuída ao membro limitado | `distribution.service.js` + `schedule.service.js` |
-| RN04 | Redistribuição não aumenta carga além do limite | `schedule.service.js` — seleciona membro com menor carga |
-| RN05 | Sem responsável por mais de 2 dias (freq. semanal+) | Coberto pela distribuição contínua |
-| RN06 | Três papéis de acesso | `roles.middleware.js` |
-| RN07 | Aviso ao alterar pesos | `members.service.js` — retorna `warning` na resposta |
-
 ## Modelo de dados
 
 ```
@@ -182,36 +102,9 @@ task_assignments (task × user × date)
 
 ## Testes Automatizados de API
 
-Testes de integração para os endpoints POST da API, implementados com **Mocha**, **Chai** e **Supertest**. Relatório HTML gerado via **Mochawesome**.
+Testes de integração para os endpoints da API, implementados com **Mocha**, **Chai** e **Supertest**. Relatório HTML gerado via **Mochawesome**.
 
-### Estrutura de testes
 
-```
-src/tests/api/
-├── index.test.js              # Arquivo central — carrega todos os testes
-├── helpers/
-│   ├── setup.js               # Configura variáveis de ambiente de teste
-│   ├── auth.helper.js         # Utilitários de autenticação (register, login, criar casa)
-│   └── db.helper.js           # Limpeza do banco de dados de teste
-├── fixtures/                  # Dados de teste (Data-Driven Testing)
-│   ├── auth.register.fixture.js
-│   ├── auth.login.fixture.js
-│   ├── houses.create.fixture.js
-│   ├── houses.join.fixture.js
-│   ├── members.invite.fixture.js
-│   ├── catalog.create.fixture.js
-│   ├── catalog.dependencies.fixture.js
-│   └── schedule.distribute.fixture.js
-└── post/                      # Testes por endpoint POST
-    ├── auth.register.test.js
-    ├── auth.login.test.js
-    ├── houses.create.test.js
-    ├── houses.join.test.js
-    ├── members.invite.test.js
-    ├── catalog.create.test.js
-    ├── catalog.dependencies.test.js
-    └── schedule.distribute.test.js
-```
 
 ### Execução dos testes
 
@@ -224,6 +117,70 @@ npm run test:api:simples
 ```
 
 O relatório HTML fica em `src/tests/api/reports/relatorio-api.html`.
+
+---
+
+## Integração Contínua (CI)
+
+A pipeline de CI é implementada com **GitHub Actions** e está definida em [`.github/workflows/ci.yaml`](.github/workflows/ci.yaml).
+
+### Gatilhos
+
+A pipeline é acionada em três situações:
+
+| Gatilho | Quando dispara |
+|---------|---------------|
+| `push` | A cada push nas branches `main` ou `develop` |
+| `schedule` | Automaticamente de segunda a sexta, às 9h BRT (12h UTC), via expressão cron |
+| `workflow_dispatch` | Manualmente pelo painel do GitHub Actions |
+
+O agendamento por `schedule` usa a sintaxe **cron** do Unix: `0 12 * * 1-5` — onde os campos representam, da esquerda para a direita, minuto, hora, dia do mês, mês e dia da semana (1 = segunda, 5 = sexta).
+
+### Jobs e sequência de execução
+
+A pipeline é dividida em três **jobs** com dependências explícitas, formando um fluxo sequencial de qualidade:
+
+```
+validacoes-estaticas
+        │
+        ▼
+testes-de-unidade-e-integracao
+        │
+        ▼
+      deploy
+```
+
+A dependência é declarada com `needs`, que garante que um job só inicia se o anterior passou com sucesso. Isso evita rodar testes em código que nem compila, e impede deploys de código não validado.
+
+Todos os jobs rodam em `ubuntu-latest`, um ambiente Linux efêmero provisionado pelo GitHub a cada execução.
+
+#### Job 1 — `validacoes-estaticas`
+
+Realiza verificações rápidas que não precisam do banco de dados:
+
+1. **Checkout** (`actions/checkout@v4`) — clona o repositório no runner.
+2. **Setup Node** (`actions/setup-node@v4`) — instala o Node.js 20.
+3. **`npm ci`** — instala dependências de forma determinística a partir do `package-lock.json`, sem alterar o lockfile. Preferido ao `npm install` em CI por ser mais rápido e previsível.
+4. **Lint** — valida estilo e padrões de código.
+
+#### Job 2 — `testes-de-unidade-e-integracao`
+
+Roda após as validações estáticas e executa a suíte completa de testes:
+
+1. Repete checkout + setup + `npm ci` (cada job recebe um runner limpo e isolado).
+2. **Testes unitários** (`npm test`) — Jest com banco mockado.
+3. **Testes de integração** (`npm run test:api`) — Mocha + Supertest contra o banco SQLite de teste.
+4. **Upload de artefato** (`actions/upload-artifact@v4`) — salva o relatório HTML do Mochawesome para download no painel do GitHub, mesmo que os testes tenham falhado (`if: always()`).
+
+> **`if: always()`** garante que o relatório seja salvo independentemente do resultado dos testes, o que é essencial para análise de falhas em CI.
+
+#### Job 3 — `deploy`
+
+Representa a etapa de entrega contínua. Só executa se os dois jobs anteriores foram aprovados (`needs: [validacoes-estaticas, testes-de-unidade-e-integracao]`). Atualmente simula o deploy com um `echo`; a integração real com o ambiente de produção pode ser adicionada neste job.
+
+### Artefatos
+
+O relatório de testes gerado pelo Mochawesome fica disponível para download diretamente na aba **Actions** do GitHub, na execução correspondente, por 90 dias (retenção padrão do GitHub).
 
 ### Heurística VADER
 
