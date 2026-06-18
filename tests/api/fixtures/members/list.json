@@ -1,0 +1,6 @@
+{
+  "admin": { "name": "Admin Lista", "email": "admin.lista@test.com", "password": "senha123" },
+  "moradorA": { "name": "Morador Lista A", "email": "morador.listaa@test.com", "password": "senha123" },
+  "moradorB": { "name": "Morador Lista B", "email": "morador.listab@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Lista Membros"
+}

@@ -1,0 +1,11 @@
+{
+  "admin": { "name": "Admin Schedule", "email": "admin.sched@test.com", "password": "senha123" },
+  "moradorA": { "name": "Morador Sched A", "email": "morador.scheda@test.com", "password": "senha123" },
+  "moradorB": { "name": "Morador Sched B", "email": "morador.schedb@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Cronograma",
+  "tarefas": [
+    { "name": "Varrer (Schedule)", "frequency": "weekly", "effort_level": "light", "room": "Sala" },
+    { "name": "Lavar louça (Schedule)", "frequency": "daily", "effort_level": "medium", "room": "Cozinha" }
+  ],
+  "periodoDistribuicao": { "period_start": "2026-08-01", "period_end": "2026-08-07" }
+}

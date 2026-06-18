@@ -1,0 +1,27 @@
+{
+  "roles": {
+    "admin":  { "name": "Admin BR",  "email": "admin.br@test.com",  "password": "senha123" },
+    "gestor": { "name": "Gestor BR", "email": "gestor.br@test.com", "password": "senha123" },
+    "morador":{ "name": "Morador BR","email": "morador.br@test.com","password": "senha123" },
+    "nomeCasa": "Casa Business Rules"
+  },
+  "bva": {
+    "admin":   { "name": "Admin BVA",   "email": "admin.bva@test.com",   "password": "senha123" },
+    "moradorA":{ "name": "Morador BVA A","email": "morador.bvaa@test.com","password": "senha123" },
+    "moradorB":{ "name": "Morador BVA B","email": "morador.bvab@test.com","password": "senha123" },
+    "nomeCasa": "Casa BVA Tolerância",
+    "tarefas": [
+      { "name": "Tarefa BVA Pesada",  "frequency": "weekly", "effort_level": "heavy",  "room": "Banheiro" },
+      { "name": "Tarefa BVA Média",   "frequency": "weekly", "effort_level": "medium", "room": "Cozinha" },
+      { "name": "Tarefa BVA Leve",    "frequency": "weekly", "effort_level": "light",  "room": "Sala" }
+    ]
+  },
+  "transitions": {
+    "admin":   { "name": "Admin Trans",   "email": "admin.trans@test.com",   "password": "senha123" },
+    "moradorA":{ "name": "Morador Trans A","email": "morador.transa@test.com","password": "senha123" },
+    "moradorB":{ "name": "Morador Trans B","email": "morador.transb@test.com","password": "senha123" },
+    "nomeCasa": "Casa Transições",
+    "tarefa": { "name": "Tarefa Transição", "frequency": "weekly", "effort_level": "medium", "room": "Sala" },
+    "periodo": { "period_start": "2026-07-07", "period_end": "2026-07-13" }
+  }
+}

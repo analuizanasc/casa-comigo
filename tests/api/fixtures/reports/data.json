@@ -1,0 +1,11 @@
+{
+  "admin": { "name": "Admin Report", "email": "admin.report@test.com", "password": "senha123" },
+  "moradorA": { "name": "Morador Report A", "email": "morador.reporta@test.com", "password": "senha123" },
+  "moradorB": { "name": "Morador Report B", "email": "morador.reportb@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Relatórios",
+  "tarefas": [
+    { "name": "Tarefa Relatório 1", "frequency": "weekly", "effort_level": "light", "room": "Sala" },
+    { "name": "Tarefa Relatório 2", "frequency": "daily", "effort_level": "medium", "room": "Cozinha" }
+  ],
+  "periodoDistribuicao": { "period_start": "2026-09-01", "period_end": "2026-09-07" }
+}

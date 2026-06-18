@@ -1,0 +1,6 @@
+{
+  "admin": { "name": "Admin CatDetail", "email": "admin.catdet@test.com", "password": "senha123" },
+  "morador": { "name": "Morador CatDetail", "email": "morador.catdet@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Catálogo Detail",
+  "tarefa": { "name": "Espanar móveis", "frequency": "weekly", "effort_level": "light", "room": "Sala", "description": "Espanar todos os móveis da sala" }
+}

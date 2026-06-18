@@ -1,0 +1,5 @@
+{
+  "admin": { "name": "Admin Notif", "email": "admin.notif@test.com", "password": "senha123" },
+  "morador": { "name": "Morador Notif", "email": "morador.notif@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Notificações"
+}

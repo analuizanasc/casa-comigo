@@ -1,0 +1,5 @@
+{
+  "usuarioValido":      { "name": "Ana Luiza",              "email": "ana.luiza@test.com",       "password": "senha123" },
+  "usuarioLimiteMinimo": { "name": "Carlos Silva",           "email": "carlos@test.com",          "password": "abc123"   },
+  "usuarioBase":        { "name": "Usuário Base Registro",  "email": "base.registro@test.com",   "password": "senha123" }
+}

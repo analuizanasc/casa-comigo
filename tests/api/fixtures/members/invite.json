@@ -1,0 +1,5 @@
+{
+  "admin":       { "name": "Admin Membros", "email": "admin.membros@test.com", "password": "senha123" },
+  "morador":     { "name": "Morador Comum", "email": "morador.comum@test.com", "password": "senha123" },
+  "novoUsuario": { "name": "Novo Usuário",  "email": "novo.usuario@test.com",  "password": "senha123" }
+}

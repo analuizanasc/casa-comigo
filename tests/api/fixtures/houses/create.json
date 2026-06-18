@@ -1,0 +1,4 @@
+{
+  "usuarioPadrao":     { "name": "Admin Criador", "email": "admin.criar.casa@test.com", "password": "senha123" },
+  "toleranciaDefault": 10
+}

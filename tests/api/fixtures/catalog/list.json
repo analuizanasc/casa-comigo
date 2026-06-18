@@ -1,0 +1,10 @@
+{
+  "admin": { "name": "Admin CatList", "email": "admin.catlist@test.com", "password": "senha123" },
+  "morador": { "name": "Morador CatList", "email": "morador.catlist@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Catálogo List",
+  "tarefas": [
+    { "name": "Varrer sala", "frequency": "weekly", "effort_level": "light", "room": "Sala" },
+    { "name": "Lavar louça", "frequency": "daily", "effort_level": "medium", "room": "Cozinha" },
+    { "name": "Limpar banheiro", "frequency": "weekly", "effort_level": "heavy", "room": "Banheiro" }
+  ]
+}

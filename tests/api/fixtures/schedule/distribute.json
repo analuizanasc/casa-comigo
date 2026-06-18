@@ -1,0 +1,10 @@
+{
+  "admin":    { "name": "Admin Distribuição", "email": "admin.distrib@test.com", "password": "senha123" },
+  "moradorA": { "name": "Morador Alfa",       "email": "morador.alfa@test.com",  "password": "senha123" },
+  "moradorB": { "name": "Morador Beta",       "email": "morador.beta@test.com",  "password": "senha123" },
+  "tarefas": [
+    { "name": "Limpar banheiro", "frequency": "weekly", "effort_level": "heavy",  "room": "Banheiro" },
+    { "name": "Varrer sala",     "frequency": "weekly", "effort_level": "light",  "room": "Sala"     },
+    { "name": "Lavar louça",     "frequency": "daily",  "effort_level": "medium", "room": "Cozinha"  }
+  ]
+}

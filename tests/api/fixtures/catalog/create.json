@@ -1,0 +1,6 @@
+{
+  "admin":          { "name": "Admin Catálogo",   "email": "admin.catalogo@test.com",   "password": "senha123" },
+  "gestorCatalogo": { "name": "Gestor Catálogo",  "email": "gestor.catalogo@test.com",  "password": "senha123" },
+  "morador":        { "name": "Morador Catálogo", "email": "morador.catalogo@test.com", "password": "senha123" },
+  "tarefaBase":     { "name": "Tarefa Base Catálogo", "frequency": "weekly", "effort_level": "light" }
+}

@@ -34,10 +34,10 @@ app.use('/api/houses/:houseId/catalog', catalogRoutes);
 app.use('/api/houses/:houseId/preferences', preferencesRoutes);
 app.use('/api/houses/:houseId/schedule', scheduleRoutes);
 app.use('/api/houses/:houseId/reports', reportsRoutes);
-app.use('/api', notificationsRoutes);
-
-// Health check
+// Health check — must be before any router that applies authenticate to /api/*
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+app.use('/api', notificationsRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));

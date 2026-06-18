@@ -1,0 +1,7 @@
+{
+  "admin": { "name": "Admin DepDel", "email": "admin.depdel@test.com", "password": "senha123" },
+  "morador": { "name": "Morador DepDel", "email": "morador.depdel@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Dep Delete",
+  "tarefaA": { "name": "Espanar (Dep Delete)", "frequency": "weekly", "effort_level": "light" },
+  "tarefaB": { "name": "Varrer (Dep Delete)", "frequency": "weekly", "effort_level": "light" }
+}

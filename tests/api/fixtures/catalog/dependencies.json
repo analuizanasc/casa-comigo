@@ -1,0 +1,7 @@
+{
+  "admin":   { "name": "Admin Dependências",   "email": "admin.dep@test.com",   "password": "senha123" },
+  "morador": { "name": "Morador Dependências", "email": "morador.dep@test.com", "password": "senha123" },
+  "tarefaA": { "name": "Espanar móveis",       "frequency": "weekly", "effort_level": "light",  "room": "Sala" },
+  "tarefaB": { "name": "Varrer a sala",        "frequency": "weekly", "effort_level": "light",  "room": "Sala" },
+  "tarefaC": { "name": "Passar pano no chão",  "frequency": "weekly", "effort_level": "medium", "room": "Sala" }
+}

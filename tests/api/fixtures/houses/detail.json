@@ -1,0 +1,5 @@
+{
+  "admin": { "name": "Admin Detalhe", "email": "admin.detalhe@test.com", "password": "senha123" },
+  "morador": { "name": "Morador Detalhe", "email": "morador.detalhe@test.com", "password": "senha123" },
+  "nomeCasa": "Casa Detalhe Test"
+}

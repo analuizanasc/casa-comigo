@@ -1,0 +1,4 @@
+{
+  "admin":      { "name": "Admin Convite", "email": "admin.join@test.com",   "password": "senha123" },
+  "novoMembro": { "name": "Novo Morador",  "email": "novo.morador@test.com", "password": "senha123" }
+}
